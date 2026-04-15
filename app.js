@@ -548,6 +548,78 @@
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
+  // ---------- Export ----------
+  // Flatten the chart onto a backing canvas with a solid background, so
+  // exports look right on any host (light or dark).
+  function chartToFlatCanvas(bg = "#161d3d") {
+    if (!state.chart) return null;
+    const src = state.chart.canvas;
+    const out = document.createElement("canvas");
+    out.width = src.width;
+    out.height = src.height;
+    const ctx = out.getContext("2d");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(src, 0, 0);
+    return out;
+  }
+
+  function safeFilename(base) {
+    const slug = String(base || "chart")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+    return slug || "chart";
+  }
+
+  function triggerDownload(href, filename) {
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function exportPng() {
+    const canvas = chartToFlatCanvas();
+    if (!canvas) return;
+    const name = safeFilename(
+      document.getElementById("explorerTitle").textContent
+    );
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, `${name}.png`);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, "image/png");
+  }
+
+  function exportSvg() {
+    const canvas = chartToFlatCanvas();
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    const w = canvas.width;
+    const h = canvas.height;
+    // Chart.js renders to canvas, so the SVG embeds the rendered PNG as an
+    // <image>. The file is a valid, scalable SVG — just not pure vector.
+    const svg =
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<svg xmlns="http://www.w3.org/2000/svg" ` +
+      `xmlns:xlink="http://www.w3.org/1999/xlink" ` +
+      `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+      `<image width="${w}" height="${h}" href="${dataUrl}"/>` +
+      `</svg>`;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const name = safeFilename(
+      document.getElementById("explorerTitle").textContent
+    );
+    triggerDownload(url, `${name}.svg`);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   // ---------- Wire-up ----------
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
@@ -589,6 +661,10 @@
       reader.readAsText(file);
       e.target.value = "";
     });
+
+    // Export
+    document.getElementById("exportPngBtn").addEventListener("click", exportPng);
+    document.getElementById("exportSvgBtn").addEventListener("click", exportSvg);
 
     // Reset palette
     document.getElementById("resetColorsBtn").addEventListener("click", () => {
