@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Interactive Data Visualization</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope</span>
+      </a>
+      <nav class="site-nav">
+        <a href="#overview">Overview</a>
+        <a href="#trends">Trends</a>
+        <a href="#breakdown">Breakdown</a>
+        <a href="#explorer">Explorer</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-inner">
+        <p class="eyebrow">Interactive dashboard</p>
+        <h1>See the story behind your numbers.</h1>
+        <p class="lede">
+          DataScope turns raw CSV data into interactive charts in seconds.
+          Explore the built-in sample below, or drop in your own file to
+          visualize trends, categories, and relationships.
+        </p>
+        <div class="hero-actions">
+          <a href="#overview" class="btn btn-primary">Explore the demo</a>
+          <a href="#explorer" class="btn btn-ghost">Upload your CSV</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="overview" class="section">
+      <div class="container">
+        <header class="section-header">
+          <h2>Overview</h2>
+          <p>Key performance indicators at a glance.</p>
+        </header>
+
+        <div class="kpi-grid">
+          <article class="kpi-card">
+            <p class="kpi-label">Total Revenue</p>
+            <p class="kpi-value" data-kpi="revenue">$0</p>
+            <p class="kpi-delta positive" data-kpi-delta="revenue">+0%</p>
+          </article>
+          <article class="kpi-card">
+            <p class="kpi-label">Active Users</p>
+            <p class="kpi-value" data-kpi="users">0</p>
+            <p class="kpi-delta positive" data-kpi-delta="users">+0%</p>
+          </article>
+          <article class="kpi-card">
+            <p class="kpi-label">Conversion Rate</p>
+            <p class="kpi-value" data-kpi="conversion">0%</p>
+            <p class="kpi-delta positive" data-kpi-delta="conversion">+0%</p>
+          </article>
+          <article class="kpi-card">
+            <p class="kpi-label">Avg. Session</p>
+            <p class="kpi-value" data-kpi="session">0m</p>
+            <p class="kpi-delta negative" data-kpi-delta="session">-0%</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="trends" class="section section-alt">
+      <div class="container">
+        <header class="section-header">
+          <h2>Trends over time</h2>
+          <p>Monthly revenue and user growth across the last 12 months.</p>
+        </header>
+        <div class="chart-grid">
+          <div class="chart-card chart-wide">
+            <div class="chart-toolbar">
+              <h3>Revenue vs. Users</h3>
+              <div class="toolbar-controls">
+                <label>
+                  Range
+                  <select id="rangeSelect">
+                    <option value="12">Last 12 months</option>
+                    <option value="6">Last 6 months</option>
+                    <option value="3">Last 3 months</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+            <div class="chart-wrap"><canvas id="lineChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="breakdown" class="section">
+      <div class="container">
+        <header class="section-header">
+          <h2>Category breakdown</h2>
+          <p>Where the growth is coming from.</p>
+        </header>
+        <div class="chart-grid">
+          <div class="chart-card">
+            <div class="chart-toolbar"><h3>Revenue by category</h3></div>
+            <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-toolbar"><h3>Traffic source mix</h3></div>
+            <div class="chart-wrap"><canvas id="doughnutChart"></canvas></div>
+          </div>
+          <div class="chart-card chart-wide">
+            <div class="chart-toolbar"><h3>Marketing spend vs. conversions</h3></div>
+            <div class="chart-wrap"><canvas id="scatterChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="explorer" class="section section-alt">
+      <div class="container">
+        <header class="section-header">
+          <h2>Data explorer</h2>
+          <p>Upload a CSV to visualize it instantly. Your data stays in the browser.</p>
+        </header>
+
+        <div class="explorer">
+          <div class="explorer-controls">
+            <label class="file-drop" id="fileDrop">
+              <input type="file" id="csvInput" accept=".csv,text/csv" />
+              <span class="file-drop-title">Drop a CSV here</span>
+              <span class="file-drop-sub">or click to browse</span>
+            </label>
+
+            <div class="field">
+              <label for="xAxisSelect">X axis (label)</label>
+              <select id="xAxisSelect" disabled></select>
+            </div>
+            <div class="field">
+              <label for="yAxisSelect">Y axis (numeric)</label>
+              <select id="yAxisSelect" disabled></select>
+            </div>
+            <div class="field">
+              <label for="chartTypeSelect">Chart type</label>
+              <select id="chartTypeSelect">
+                <option value="bar">Bar</option>
+                <option value="line">Line</option>
+                <option value="doughnut">Doughnut</option>
+              </select>
+            </div>
+            <button id="loadSampleBtn" class="btn btn-ghost" type="button">
+              Load sample dataset
+            </button>
+          </div>
+
+          <div class="chart-card explorer-chart">
+            <div class="chart-toolbar">
+              <h3 id="explorerTitle">Your chart will appear here</h3>
+            </div>
+            <div class="chart-wrap"><canvas id="explorerChart"></canvas></div>
+            <p id="explorerHint" class="chart-hint">
+              Tip: The first row of your CSV should be column headers.
+            </p>
+          </div>
+        </div>
+
+        <div class="data-preview" id="dataPreview" hidden>
+          <h3>Data preview</h3>
+          <div class="table-wrap">
+            <table id="previewTable"></table>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Built with Chart.js.</p>
+      <p class="muted">All processing happens locally in your browser.</p>
+    </div>
+  </footer>
+</body>
+</html>
