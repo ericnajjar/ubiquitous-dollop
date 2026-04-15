@@ -1,8 +1,6 @@
-// DataScope — interactive data visualization
-// All rendering happens client-side with Chart.js.
-
+// DataScope — simplified: showcase + editable data explorer.
 (() => {
-  const palette = [
+  const defaultPalette = [
     "#6ea8ff",
     "#8b5cf6",
     "#4ade80",
@@ -13,68 +11,13 @@
     "#a78bfa",
   ];
 
-  // ---------- Sample dataset ----------
-  const months = [
-    "May 2025",
-    "Jun 2025",
-    "Jul 2025",
-    "Aug 2025",
-    "Sep 2025",
-    "Oct 2025",
-    "Nov 2025",
-    "Dec 2025",
-    "Jan 2026",
-    "Feb 2026",
-    "Mar 2026",
-    "Apr 2026",
-  ];
-
-  const revenueSeries = [
-    42000, 45500, 48200, 51000, 49800, 56400, 63100, 71200, 68900, 74500,
-    80300, 86100,
-  ];
-  const usersSeries = [
-    1120, 1180, 1240, 1330, 1310, 1460, 1620, 1810, 1760, 1895, 2035, 2170,
-  ];
-
-  const categoryData = {
-    labels: [
-      "Software",
-      "Services",
-      "Hardware",
-      "Training",
-      "Subscriptions",
-      "Support",
-    ],
-    values: [182400, 96200, 64800, 38500, 121300, 54700],
-  };
-
-  const trafficData = {
-    labels: ["Organic", "Direct", "Referral", "Social", "Email", "Paid"],
-    values: [38, 22, 12, 14, 8, 6],
-  };
-
-  const scatterData = Array.from({ length: 24 }, (_, i) => {
-    const spend = 500 + i * 250 + Math.random() * 400;
-    const conversions =
-      spend * 0.08 + Math.random() * 60 - (i > 16 ? i * 3 : 0);
-    return { x: Math.round(spend), y: Math.max(20, Math.round(conversions)) };
-  });
-
-  // ---------- Helpers ----------
-  const fmtCurrency = (v) =>
-    "$" + Math.round(v).toLocaleString(undefined, { maximumFractionDigits: 0 });
-  const fmtNumber = (v) => Math.round(v).toLocaleString();
-  const pctChange = (a, b) => (b === 0 ? 0 : ((a - b) / b) * 100);
-
-  function defaultChartOptions() {
+  // ---------- Shared Chart.js helpers ----------
+  function baseOptions() {
     return {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          labels: { color: "#c9d1ff", boxWidth: 12, boxHeight: 12 },
-        },
+        legend: { labels: { color: "#c9d1ff", boxWidth: 12, boxHeight: 12 } },
         tooltip: {
           backgroundColor: "rgba(22, 29, 61, 0.95)",
           borderColor: "rgba(110, 168, 255, 0.3)",
@@ -97,224 +40,124 @@
     };
   }
 
-  function polarOptions() {
-    // No axes for doughnut/pie
-    const o = defaultChartOptions();
+  function noScaleOptions() {
+    const o = baseOptions();
     delete o.scales;
     return o;
   }
 
-  // ---------- KPI ----------
-  function setKpis(range = 12) {
-    const rev = revenueSeries.slice(-range);
-    const usr = usersSeries.slice(-range);
-
-    const totalRev = rev.reduce((a, b) => a + b, 0);
-    const totalUsers = usr[usr.length - 1];
-    const conversion = 3.6 + (range === 3 ? 0.8 : range === 6 ? 0.4 : 0);
-    const session = 6.2 - (range === 3 ? 0.3 : 0);
-
-    // compare to previous equal-length window
-    const prevRev = revenueSeries
-      .slice(-range * 2, -range)
-      .reduce((a, b) => a + b, 0);
-    const prevUsr = usersSeries.slice(-range * 2, -range);
-    const prevUsers = prevUsr[prevUsr.length - 1] || totalUsers;
-
-    document.querySelector('[data-kpi="revenue"]').textContent =
-      fmtCurrency(totalRev);
-    document.querySelector('[data-kpi="users"]').textContent =
-      fmtNumber(totalUsers);
-    document.querySelector('[data-kpi="conversion"]').textContent =
-      conversion.toFixed(1) + "%";
-    document.querySelector('[data-kpi="session"]').textContent =
-      session.toFixed(1) + "m";
-
-    const revDelta = pctChange(totalRev, prevRev || totalRev);
-    const usrDelta = pctChange(totalUsers, prevUsers);
-
-    setDelta("revenue", revDelta);
-    setDelta("users", usrDelta);
-    setDelta("conversion", 4.2);
-    setDelta("session", -1.8);
-  }
-
-  function setDelta(key, value) {
-    const el = document.querySelector(`[data-kpi-delta="${key}"]`);
-    if (!el) return;
-    const positive = value >= 0;
-    el.textContent = (positive ? "+" : "") + value.toFixed(1) + "%";
-    el.classList.toggle("positive", positive);
-    el.classList.toggle("negative", !positive);
-  }
-
-  // ---------- Charts ----------
-  let lineChart, barChart, doughnutChart, scatterChart, explorerChart;
-
-  function renderLineChart(range = 12) {
-    const ctx = document.getElementById("lineChart");
-    const labels = months.slice(-range);
-    const revenue = revenueSeries.slice(-range);
-    const users = usersSeries.slice(-range);
-
-    const gradientRev = ctx
-      .getContext("2d")
-      .createLinearGradient(0, 0, 0, 320);
-    gradientRev.addColorStop(0, "rgba(110, 168, 255, 0.45)");
-    gradientRev.addColorStop(1, "rgba(110, 168, 255, 0)");
-
-    const data = {
-      labels,
-      datasets: [
-        {
-          label: "Revenue",
-          data: revenue,
-          borderColor: palette[0],
-          backgroundColor: gradientRev,
-          fill: true,
-          tension: 0.35,
-          yAxisID: "y",
-          pointRadius: 3,
-          pointHoverRadius: 5,
-        },
-        {
-          label: "Users",
-          data: users,
-          borderColor: palette[1],
-          backgroundColor: "rgba(139, 92, 246, 0.1)",
-          fill: false,
-          tension: 0.35,
-          yAxisID: "y1",
-          pointRadius: 3,
-          pointHoverRadius: 5,
-        },
-      ],
-    };
-
-    const options = defaultChartOptions();
-    options.interaction = { mode: "index", intersect: false };
-    options.scales = {
-      x: options.scales.x,
-      y: {
-        ...options.scales.y,
-        position: "left",
-        ticks: {
-          ...options.scales.y.ticks,
-          callback: (v) => "$" + (v / 1000).toFixed(0) + "k",
-        },
-      },
-      y1: {
-        position: "right",
-        grid: { drawOnChartArea: false },
-        ticks: { color: "#9aa4c7" },
-      },
-    };
-
-    if (lineChart) lineChart.destroy();
-    lineChart = new Chart(ctx, { type: "line", data, options });
-  }
-
-  function renderBarChart() {
-    const ctx = document.getElementById("barChart");
-    if (barChart) barChart.destroy();
-    barChart = new Chart(ctx, {
+  // ---------- Section 1: example charts ----------
+  function renderExamples() {
+    new Chart(document.getElementById("exampleBar"), {
       type: "bar",
       data: {
-        labels: categoryData.labels,
+        labels: ["Q1", "Q2", "Q3", "Q4"],
         datasets: [
           {
             label: "Revenue",
-            data: categoryData.values,
-            backgroundColor: categoryData.labels.map(
-              (_, i) => palette[i % palette.length]
-            ),
+            data: [42, 58, 51, 73],
+            backgroundColor: defaultPalette.slice(0, 4),
             borderRadius: 6,
           },
         ],
       },
       options: {
-        ...defaultChartOptions(),
+        ...baseOptions(),
         plugins: {
-          ...defaultChartOptions().plugins,
+          ...baseOptions().plugins,
           legend: { display: false },
         },
       },
     });
-  }
 
-  function renderDoughnutChart() {
-    const ctx = document.getElementById("doughnutChart");
-    if (doughnutChart) doughnutChart.destroy();
-    doughnutChart = new Chart(ctx, {
-      type: "doughnut",
+    new Chart(document.getElementById("exampleLine"), {
+      type: "line",
       data: {
-        labels: trafficData.labels,
+        labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
         datasets: [
           {
-            data: trafficData.values,
-            backgroundColor: trafficData.labels.map(
-              (_, i) => palette[i % palette.length]
-            ),
+            label: "Users",
+            data: [120, 145, 160, 210, 260, 320],
+            borderColor: defaultPalette[0],
+            backgroundColor: "rgba(110, 168, 255, 0.18)",
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+          },
+        ],
+      },
+      options: {
+        ...baseOptions(),
+        plugins: {
+          ...baseOptions().plugins,
+          legend: { display: false },
+        },
+      },
+    });
+
+    new Chart(document.getElementById("exampleDoughnut"), {
+      type: "doughnut",
+      data: {
+        labels: ["Organic", "Paid", "Referral", "Social"],
+        datasets: [
+          {
+            data: [48, 22, 18, 12],
+            backgroundColor: defaultPalette.slice(0, 4),
             borderColor: "#161d3d",
             borderWidth: 2,
           },
         ],
       },
-      options: {
-        ...polarOptions(),
-        cutout: "62%",
-      },
+      options: { ...noScaleOptions(), cutout: "60%" },
     });
   }
 
-  function renderScatterChart() {
-    const ctx = document.getElementById("scatterChart");
-    if (scatterChart) scatterChart.destroy();
-    scatterChart = new Chart(ctx, {
-      type: "scatter",
-      data: {
-        datasets: [
-          {
-            label: "Campaign",
-            data: scatterData,
-            backgroundColor: "rgba(139, 92, 246, 0.7)",
-            borderColor: palette[1],
-            pointRadius: 5,
-            pointHoverRadius: 7,
-          },
-        ],
-      },
-      options: {
-        ...defaultChartOptions(),
-        scales: {
-          x: {
-            ...defaultChartOptions().scales.x,
-            title: {
-              display: true,
-              text: "Spend ($)",
-              color: "#9aa4c7",
-            },
-            ticks: {
-              color: "#9aa4c7",
-              callback: (v) => "$" + v.toLocaleString(),
-            },
-          },
-          y: {
-            ...defaultChartOptions().scales.y,
-            title: {
-              display: true,
-              text: "Conversions",
-              color: "#9aa4c7",
-            },
-          },
-        },
-      },
+  // ---------- Section 2: data explorer ----------
+  // Editable dataset: { headers: [string], rows: [[any]] }
+  const state = {
+    headers: [],
+    rows: [],
+    colors: [...defaultPalette],
+    chart: null,
+  };
+
+  const SAMPLE = {
+    headers: ["Category", "Revenue", "Units"],
+    rows: [
+      ["Software", 182400, 420],
+      ["Services", 96200, 210],
+      ["Hardware", 64800, 95],
+      ["Training", 38500, 140],
+      ["Subscriptions", 121300, 610],
+      ["Support", 54700, 330],
+    ],
+  };
+
+  function emptyDataset() {
+    return {
+      headers: ["Label", "Value"],
+      rows: [
+        ["A", 10],
+        ["B", 20],
+        ["C", 30],
+      ],
+    };
+  }
+
+  function isNumericColumn(headerIndex) {
+    return state.rows.every((r) => {
+      const v = r[headerIndex];
+      return v === "" || v === null || !Number.isNaN(Number(v));
     });
   }
 
-  // ---------- CSV parsing ----------
-  // Minimal RFC-4180-ish CSV parser: handles quoted fields, escaped quotes,
-  // commas and newlines inside quotes.
+  function numericColumnIndices() {
+    return state.headers
+      .map((_, i) => i)
+      .filter((i) => isNumericColumn(i) && state.rows.length > 0);
+  }
+
+  // ---------- CSV ----------
   function parseCSV(text) {
     const rows = [];
     let field = "";
@@ -355,225 +198,365 @@
       row.push(field);
       rows.push(row);
     }
-    // drop trailing empty rows
     return rows.filter((r) => r.some((v) => v !== ""));
   }
 
-  function toDataset(rows) {
-    if (rows.length < 2) return null;
-    const headers = rows[0].map((h) => h.trim());
-    const records = rows.slice(1).map((r) => {
-      const obj = {};
-      headers.forEach((h, i) => {
+  function loadFromCSV(text) {
+    const parsed = parseCSV(text);
+    if (parsed.length < 2) {
+      alert("CSV needs at least a header row and one data row.");
+      return;
+    }
+    const headers = parsed[0].map((h) => h.trim() || "Column");
+    const rows = parsed.slice(1).map((r) =>
+      headers.map((_, i) => {
         const raw = (r[i] ?? "").trim();
         const num = Number(raw);
-        obj[h] = raw !== "" && !Number.isNaN(num) ? num : raw;
-      });
-      return obj;
-    });
-
-    const numericColumns = headers.filter((h) =>
-      records.every((r) => r[h] === "" || typeof r[h] === "number")
+        return raw !== "" && !Number.isNaN(num) ? num : raw;
+      })
     );
-    return { headers, records, numericColumns };
+    setDataset({ headers, rows });
   }
 
-  // ---------- Explorer ----------
-  const state = { dataset: null };
+  // ---------- Dataset mutation ----------
+  function setDataset({ headers, rows }) {
+    state.headers = [...headers];
+    state.rows = rows.map((r) => [...r]);
+    // Pad colors if needed
+    while (state.colors.length < Math.max(state.rows.length, 8)) {
+      state.colors.push(
+        defaultPalette[state.colors.length % defaultPalette.length]
+      );
+    }
+    renderAxisSelects();
+    renderTable();
+    renderColorSwatches();
+    renderExplorerChart();
+  }
 
-  function populateExplorerOptions(dataset) {
+  function addRow() {
+    const newRow = state.headers.map((_, i) => {
+      // Default to 0 for numeric-looking columns, empty otherwise.
+      const numeric = state.rows.length === 0 || isNumericColumn(i);
+      return numeric ? 0 : "";
+    });
+    // Give the label column a friendly default.
+    if (state.headers.length > 0 && state.rows[0]) {
+      const labelIdx = state.headers.findIndex((_, i) => !isNumericColumn(i));
+      if (labelIdx >= 0) {
+        newRow[labelIdx] = `Item ${state.rows.length + 1}`;
+      }
+    }
+    state.rows.push(newRow);
+    renderTable();
+    renderColorSwatches();
+    renderExplorerChart();
+  }
+
+  function removeRow(index) {
+    state.rows.splice(index, 1);
+    renderTable();
+    renderColorSwatches();
+    renderExplorerChart();
+  }
+
+  function addColumn() {
+    const name = `Column ${state.headers.length + 1}`;
+    state.headers.push(name);
+    state.rows.forEach((r) => r.push(0));
+    renderAxisSelects();
+    renderTable();
+    renderExplorerChart();
+  }
+
+  function removeColumn(index) {
+    if (state.headers.length <= 1) return;
+    state.headers.splice(index, 1);
+    state.rows.forEach((r) => r.splice(index, 1));
+    renderAxisSelects();
+    renderTable();
+    renderExplorerChart();
+  }
+
+  function updateCell(rowIdx, colIdx, raw) {
+    const num = Number(raw);
+    state.rows[rowIdx][colIdx] =
+      raw !== "" && !Number.isNaN(num) ? num : raw;
+    renderExplorerChart();
+  }
+
+  function updateHeader(colIdx, value) {
+    state.headers[colIdx] = value || `Column ${colIdx + 1}`;
+    renderAxisSelects();
+    renderExplorerChart();
+  }
+
+  // ---------- Rendering: table ----------
+  function renderTable() {
+    const table = document.getElementById("editorTable");
+    table.innerHTML = "";
+
+    // Header row
+    const thead = document.createElement("thead");
+    const trHead = document.createElement("tr");
+
+    state.headers.forEach((h, colIdx) => {
+      const th = document.createElement("th");
+      const wrap = document.createElement("div");
+      wrap.className = "col-head";
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "col-input";
+      input.value = h;
+      input.setAttribute("aria-label", `Column ${colIdx + 1} name`);
+      input.addEventListener("change", (e) =>
+        updateHeader(colIdx, e.target.value.trim())
+      );
+      wrap.appendChild(input);
+
+      if (state.headers.length > 1) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "col-action";
+        btn.title = "Remove column";
+        btn.setAttribute("aria-label", `Remove column ${h}`);
+        btn.textContent = "×";
+        btn.addEventListener("click", () => removeColumn(colIdx));
+        wrap.appendChild(btn);
+      }
+
+      th.appendChild(wrap);
+      trHead.appendChild(th);
+    });
+
+    // trailing cell for row actions
+    const trailTh = document.createElement("th");
+    trailTh.className = "row-action-cell";
+    trailTh.setAttribute("aria-label", "Row actions");
+    trHead.appendChild(trailTh);
+
+    thead.appendChild(trHead);
+    table.appendChild(thead);
+
+    // Body
+    const tbody = document.createElement("tbody");
+    state.rows.forEach((row, rowIdx) => {
+      const tr = document.createElement("tr");
+      row.forEach((val, colIdx) => {
+        const td = document.createElement("td");
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "cell-input";
+        input.value = String(val);
+        input.setAttribute(
+          "aria-label",
+          `${state.headers[colIdx] || "Column"} row ${rowIdx + 1}`
+        );
+        if (typeof val === "number") input.classList.add("numeric");
+        input.addEventListener("change", (e) => {
+          updateCell(rowIdx, colIdx, e.target.value);
+          if (!Number.isNaN(Number(e.target.value)) && e.target.value !== "") {
+            input.classList.add("numeric");
+          } else {
+            input.classList.remove("numeric");
+          }
+        });
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
+
+      const actionTd = document.createElement("td");
+      actionTd.className = "row-action-cell";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "row-action";
+      btn.title = "Remove row";
+      btn.setAttribute("aria-label", `Remove row ${rowIdx + 1}`);
+      btn.textContent = "×";
+      btn.addEventListener("click", () => removeRow(rowIdx));
+      actionTd.appendChild(btn);
+      tr.appendChild(actionTd);
+
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+
+    document.getElementById("editorHint").textContent =
+      `${state.rows.length} row${state.rows.length === 1 ? "" : "s"} • ${state.headers.length} column${state.headers.length === 1 ? "" : "s"}`;
+  }
+
+  // ---------- Rendering: axis selects ----------
+  function renderAxisSelects() {
     const xSel = document.getElementById("xAxisSelect");
     const ySel = document.getElementById("yAxisSelect");
+
+    const prevX = xSel.value;
+    const prevY = ySel.value;
+
     xSel.innerHTML = "";
     ySel.innerHTML = "";
 
-    dataset.headers.forEach((h) => {
-      const opt = document.createElement("option");
-      opt.value = h;
-      opt.textContent = h;
-      xSel.appendChild(opt);
+    state.headers.forEach((h, i) => {
+      const xOpt = document.createElement("option");
+      xOpt.value = String(i);
+      xOpt.textContent = h;
+      xSel.appendChild(xOpt);
     });
 
-    dataset.numericColumns.forEach((h) => {
-      const opt = document.createElement("option");
-      opt.value = h;
-      opt.textContent = h;
-      ySel.appendChild(opt);
+    const numericCols = numericColumnIndices();
+    const yHeaders = numericCols.length > 0 ? numericCols : state.headers.map((_, i) => i);
+    yHeaders.forEach((i) => {
+      const yOpt = document.createElement("option");
+      yOpt.value = String(i);
+      yOpt.textContent = state.headers[i];
+      ySel.appendChild(yOpt);
     });
 
-    // Default selections: first non-numeric column for x, first numeric for y.
-    const nonNumeric = dataset.headers.find(
-      (h) => !dataset.numericColumns.includes(h)
-    );
-    xSel.value = nonNumeric || dataset.headers[0];
-    ySel.value = dataset.numericColumns[0] || dataset.headers[1] || "";
+    // Preserve selection if still valid, otherwise pick sensible defaults.
+    if (prevX && [...xSel.options].some((o) => o.value === prevX)) {
+      xSel.value = prevX;
+    } else {
+      const nonNumeric = state.headers.findIndex((_, i) => !isNumericColumn(i));
+      xSel.value = String(nonNumeric >= 0 ? nonNumeric : 0);
+    }
 
-    xSel.disabled = false;
-    ySel.disabled = dataset.numericColumns.length === 0;
+    if (prevY && [...ySel.options].some((o) => o.value === prevY)) {
+      ySel.value = prevY;
+    } else {
+      ySel.value = String(numericCols[0] ?? 1 ?? 0);
+    }
   }
 
-  function renderExplorerChart() {
-    const dataset = state.dataset;
-    if (!dataset) return;
+  // ---------- Rendering: color swatches ----------
+  function renderColorSwatches() {
+    const wrap = document.getElementById("colorSwatches");
+    wrap.innerHTML = "";
 
-    const xKey = document.getElementById("xAxisSelect").value;
-    const yKey = document.getElementById("yAxisSelect").value;
+    const type = document.getElementById("chartTypeSelect").value;
+    // For bar/doughnut, per-row color. For line, a single series color.
+    const count = type === "line" ? 1 : Math.max(state.rows.length, 1);
+
+    for (let i = 0; i < count; i++) {
+      const swatch = document.createElement("label");
+      swatch.className = "swatch";
+      swatch.style.background = state.colors[i] || defaultPalette[i % defaultPalette.length];
+      swatch.title =
+        type === "line"
+          ? "Series color"
+          : state.rows[i]
+            ? `Color for row ${i + 1}`
+            : `Color ${i + 1}`;
+
+      const input = document.createElement("input");
+      input.type = "color";
+      input.value = normalizeHex(state.colors[i] || defaultPalette[i % defaultPalette.length]);
+      input.addEventListener("input", (e) => {
+        state.colors[i] = e.target.value;
+        swatch.style.background = e.target.value;
+        renderExplorerChart();
+      });
+      swatch.appendChild(input);
+      wrap.appendChild(swatch);
+    }
+  }
+
+  function normalizeHex(c) {
+    // color inputs only accept #rrggbb
+    if (!c) return "#6ea8ff";
+    if (/^#[0-9a-f]{6}$/i.test(c)) return c;
+    // named / rgba fallback — just use default
+    return "#6ea8ff";
+  }
+
+  // ---------- Rendering: chart ----------
+  function renderExplorerChart() {
+    const xIdx = Number(document.getElementById("xAxisSelect").value);
+    const yIdx = Number(document.getElementById("yAxisSelect").value);
     const type = document.getElementById("chartTypeSelect").value;
 
-    if (!xKey || !yKey) return;
+    if (
+      Number.isNaN(xIdx) ||
+      Number.isNaN(yIdx) ||
+      !state.headers[xIdx] ||
+      !state.headers[yIdx] ||
+      state.rows.length === 0
+    ) {
+      if (state.chart) {
+        state.chart.destroy();
+        state.chart = null;
+      }
+      document.getElementById("explorerTitle").textContent = "Chart";
+      return;
+    }
 
-    const labels = dataset.records.map((r) => String(r[xKey]));
-    const values = dataset.records.map((r) => {
-      const v = r[yKey];
+    const labels = state.rows.map((r) => String(r[xIdx] ?? ""));
+    const values = state.rows.map((r) => {
+      const v = r[yIdx];
       return typeof v === "number" ? v : Number(v) || 0;
     });
 
     const ctx = document.getElementById("explorerChart");
-    if (explorerChart) explorerChart.destroy();
+    if (state.chart) state.chart.destroy();
 
-    const isCategorical = type === "doughnut";
-    const colors = labels.map((_, i) => palette[i % palette.length]);
+    const perPoint = type === "bar" || type === "doughnut";
+    const colors = labels.map(
+      (_, i) => state.colors[i] || defaultPalette[i % defaultPalette.length]
+    );
+    const seriesColor = state.colors[0] || defaultPalette[0];
 
-    const data = {
-      labels,
-      datasets: [
-        {
-          label: yKey,
-          data: values,
-          backgroundColor: isCategorical ? colors : palette[0],
-          borderColor: isCategorical ? "#161d3d" : palette[0],
-          borderWidth: isCategorical ? 2 : 2,
-          borderRadius: type === "bar" ? 6 : 0,
-          tension: 0.35,
-          fill: type === "line" ? false : true,
-          pointRadius: type === "line" ? 3 : 0,
-        },
-      ],
+    const dataset = {
+      label: state.headers[yIdx],
+      data: values,
+      backgroundColor: perPoint ? colors : hexWithAlpha(seriesColor, 0.18),
+      borderColor: perPoint ? (type === "doughnut" ? "#161d3d" : colors) : seriesColor,
+      borderWidth: type === "doughnut" ? 2 : 2,
+      borderRadius: type === "bar" ? 6 : 0,
+      tension: 0.35,
+      fill: type === "line",
+      pointRadius: type === "line" ? 3 : 0,
+      pointBackgroundColor: seriesColor,
     };
 
-    const options = isCategorical ? polarOptions() : defaultChartOptions();
-    if (isCategorical) options.cutout = "60%";
+    const options =
+      type === "doughnut" ? { ...noScaleOptions(), cutout: "60%" } : baseOptions();
 
-    explorerChart = new Chart(ctx, { type, data, options });
+    if (type !== "doughnut") {
+      options.plugins = {
+        ...options.plugins,
+        legend: { display: false },
+      };
+    }
 
-    document.getElementById("explorerTitle").textContent = `${yKey} by ${xKey}`;
-    document.getElementById("explorerHint").textContent = `${dataset.records.length} rows • ${dataset.headers.length} columns`;
-  }
-
-  function renderPreviewTable(dataset, maxRows = 10) {
-    const wrap = document.getElementById("dataPreview");
-    const table = document.getElementById("previewTable");
-    table.innerHTML = "";
-
-    const thead = document.createElement("thead");
-    const trHead = document.createElement("tr");
-    dataset.headers.forEach((h) => {
-      const th = document.createElement("th");
-      th.textContent = h;
-      trHead.appendChild(th);
+    state.chart = new Chart(ctx, {
+      type,
+      data: { labels, datasets: [dataset] },
+      options,
     });
-    thead.appendChild(trHead);
-    table.appendChild(thead);
 
-    const tbody = document.createElement("tbody");
-    dataset.records.slice(0, maxRows).forEach((r) => {
-      const tr = document.createElement("tr");
-      dataset.headers.forEach((h) => {
-        const td = document.createElement("td");
-        const v = r[h];
-        td.textContent =
-          typeof v === "number" ? v.toLocaleString() : String(v);
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-
-    wrap.hidden = false;
+    document.getElementById("explorerTitle").textContent =
+      `${state.headers[yIdx]} by ${state.headers[xIdx]}`;
   }
 
-  function loadDataset(dataset) {
-    state.dataset = dataset;
-    populateExplorerOptions(dataset);
-    renderExplorerChart();
-    renderPreviewTable(dataset);
-  }
-
-  function handleFile(file) {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const text = String(e.target.result || "");
-        const rows = parseCSV(text);
-        const dataset = toDataset(rows);
-        if (!dataset) {
-          alert("Could not parse that CSV — is it empty?");
-          return;
-        }
-        loadDataset(dataset);
-      } catch (err) {
-        console.error(err);
-        alert("Failed to parse CSV: " + err.message);
-      }
-    };
-    reader.readAsText(file);
-  }
-
-  function buildSampleDataset() {
-    const headers = ["Month", "Revenue", "Users", "Conversions"];
-    const records = months.map((m, i) => ({
-      Month: m,
-      Revenue: revenueSeries[i],
-      Users: usersSeries[i],
-      Conversions: Math.round(usersSeries[i] * (0.03 + Math.random() * 0.02)),
-    }));
-    return {
-      headers,
-      records,
-      numericColumns: ["Revenue", "Users", "Conversions"],
-    };
+  function hexWithAlpha(hex, alpha) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!m) return hex;
+    const r = parseInt(m[1], 16);
+    const g = parseInt(m[2], 16);
+    const b = parseInt(m[3], 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
   // ---------- Wire-up ----------
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
 
-    setKpis(12);
-    renderLineChart(12);
-    renderBarChart();
-    renderDoughnutChart();
-    renderScatterChart();
+    renderExamples();
 
-    document.getElementById("rangeSelect").addEventListener("change", (e) => {
-      const r = Number(e.target.value);
-      setKpis(r);
-      renderLineChart(r);
-    });
+    setDataset(SAMPLE);
 
-    // Explorer wiring
-    const csvInput = document.getElementById("csvInput");
-    const fileDrop = document.getElementById("fileDrop");
-
-    csvInput.addEventListener("change", (e) => handleFile(e.target.files[0]));
-
-    ["dragenter", "dragover"].forEach((evt) =>
-      fileDrop.addEventListener(evt, (e) => {
-        e.preventDefault();
-        fileDrop.classList.add("dragover");
-      })
-    );
-    ["dragleave", "drop"].forEach((evt) =>
-      fileDrop.addEventListener(evt, (e) => {
-        e.preventDefault();
-        fileDrop.classList.remove("dragover");
-      })
-    );
-    fileDrop.addEventListener("drop", (e) => {
-      const file = e.dataTransfer?.files?.[0];
-      if (file) handleFile(file);
-    });
-
+    // Axis + chart type
     document
       .getElementById("xAxisSelect")
       .addEventListener("change", renderExplorerChart);
@@ -582,14 +565,45 @@
       .addEventListener("change", renderExplorerChart);
     document
       .getElementById("chartTypeSelect")
-      .addEventListener("change", renderExplorerChart);
+      .addEventListener("change", () => {
+        renderColorSwatches();
+        renderExplorerChart();
+      });
 
+    // Editor buttons
+    document.getElementById("addRowBtn").addEventListener("click", addRow);
+    document.getElementById("addColBtn").addEventListener("click", addColumn);
+    document
+      .getElementById("clearDataBtn")
+      .addEventListener("click", () => setDataset(emptyDataset()));
     document
       .getElementById("loadSampleBtn")
-      .addEventListener("click", () => loadDataset(buildSampleDataset()));
+      .addEventListener("click", () => setDataset(SAMPLE));
+
+    // CSV upload
+    document.getElementById("csvInput").addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => loadFromCSV(String(ev.target.result || ""));
+      reader.readAsText(file);
+      e.target.value = "";
+    });
+
+    // Reset palette
+    document.getElementById("resetColorsBtn").addEventListener("click", () => {
+      state.colors = [...defaultPalette];
+      // pad if needed
+      while (state.colors.length < state.rows.length) {
+        state.colors.push(
+          defaultPalette[state.colors.length % defaultPalette.length]
+        );
+      }
+      renderColorSwatches();
+      renderExplorerChart();
+    });
   }
 
-  // Chart.js is loaded with `defer`, so DOMContentLoaded is safe.
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
