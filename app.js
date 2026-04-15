@@ -131,6 +131,7 @@
     headers: [],
     rows: [],
     colors: [...defaultPalette],
+    seriesIndices: [], // indices of columns currently plotted on the Y axis
     chart: null,
   };
 
@@ -235,12 +236,15 @@
   function setDataset({ headers, rows }) {
     state.headers = [...headers];
     state.rows = rows.map((r) => [...r]);
-    // Pad colors if needed
-    while (state.colors.length < Math.max(state.rows.length, 8)) {
+    // Pad colors if needed (enough for either rows or series cardinality)
+    while (state.colors.length < Math.max(state.rows.length, state.headers.length, 8)) {
       state.colors.push(
         defaultPalette[state.colors.length % defaultPalette.length]
       );
     }
+    // Default Y series: first numeric column, or first non-X column.
+    const numeric = numericColumnIndices();
+    state.seriesIndices = numeric.length > 0 ? [numeric[0]] : state.headers.length > 1 ? [1] : [0];
     renderAxisSelects();
     renderTable();
     renderColorSwatches();
@@ -286,8 +290,17 @@
     if (state.headers.length <= 1) return;
     state.headers.splice(index, 1);
     state.rows.forEach((r) => r.splice(index, 1));
+    // Drop removed column from series; shift higher indices down.
+    state.seriesIndices = state.seriesIndices
+      .filter((i) => i !== index)
+      .map((i) => (i > index ? i - 1 : i));
+    if (state.seriesIndices.length === 0) {
+      const numeric = numericColumnIndices();
+      state.seriesIndices = numeric.length > 0 ? [numeric[0]] : [0];
+    }
     renderAxisSelects();
     renderTable();
+    renderColorSwatches();
     renderExplorerChart();
   }
 
@@ -403,13 +416,8 @@
   // ---------- Rendering: axis selects ----------
   function renderAxisSelects() {
     const xSel = document.getElementById("xAxisSelect");
-    const ySel = document.getElementById("yAxisSelect");
-
     const prevX = xSel.value;
-    const prevY = ySel.value;
-
     xSel.innerHTML = "";
-    ySel.innerHTML = "";
 
     state.headers.forEach((h, i) => {
       const xOpt = document.createElement("option");
@@ -418,16 +426,6 @@
       xSel.appendChild(xOpt);
     });
 
-    const numericCols = numericColumnIndices();
-    const yHeaders = numericCols.length > 0 ? numericCols : state.headers.map((_, i) => i);
-    yHeaders.forEach((i) => {
-      const yOpt = document.createElement("option");
-      yOpt.value = String(i);
-      yOpt.textContent = state.headers[i];
-      ySel.appendChild(yOpt);
-    });
-
-    // Preserve selection if still valid, otherwise pick sensible defaults.
     if (prevX && [...xSel.options].some((o) => o.value === prevX)) {
       xSel.value = prevX;
     } else {
@@ -435,11 +433,47 @@
       xSel.value = String(nonNumeric >= 0 ? nonNumeric : 0);
     }
 
-    if (prevY && [...ySel.options].some((o) => o.value === prevY)) {
-      ySel.value = prevY;
-    } else {
-      ySel.value = String(numericCols[0] ?? 1 ?? 0);
+    renderYPills();
+  }
+
+  function renderYPills() {
+    const wrap = document.getElementById("yAxisPills");
+    wrap.innerHTML = "";
+
+    const numericCols = numericColumnIndices();
+    const cols =
+      numericCols.length > 0 ? numericCols : state.headers.map((_, i) => i);
+
+    // Clean up stale series indices (columns that no longer exist / are no longer numeric).
+    state.seriesIndices = state.seriesIndices.filter((i) => cols.includes(i));
+    if (state.seriesIndices.length === 0 && cols.length > 0) {
+      state.seriesIndices = [cols[0]];
     }
+
+    cols.forEach((i) => {
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = "pill";
+      if (state.seriesIndices.includes(i)) pill.classList.add("active");
+      pill.textContent = state.headers[i];
+      pill.setAttribute("aria-pressed", String(state.seriesIndices.includes(i)));
+      pill.addEventListener("click", () => toggleSeries(i));
+      wrap.appendChild(pill);
+    });
+  }
+
+  function toggleSeries(idx) {
+    const pos = state.seriesIndices.indexOf(idx);
+    if (pos >= 0) {
+      // Keep at least one series selected.
+      if (state.seriesIndices.length <= 1) return;
+      state.seriesIndices.splice(pos, 1);
+    } else {
+      state.seriesIndices.push(idx);
+    }
+    renderYPills();
+    renderColorSwatches();
+    renderExplorerChart();
   }
 
   // ---------- Rendering: color swatches ----------
@@ -448,23 +482,27 @@
     wrap.innerHTML = "";
 
     const type = document.getElementById("chartTypeSelect").value;
-    // Per-row colors for categorical types; a single series color otherwise.
-    const isPerPoint = PER_POINT_TYPES.has(type);
-    const count = isPerPoint ? Math.max(state.rows.length, 1) : 1;
+    const seriesCount = state.seriesIndices.length;
+    // One swatch per row only when there's a single series on a per-point type.
+    const isPerRow = PER_POINT_TYPES.has(type) && seriesCount === 1;
+    const count = isPerRow ? Math.max(state.rows.length, 1) : Math.max(seriesCount, 1);
 
     for (let i = 0; i < count; i++) {
       const swatch = document.createElement("label");
       swatch.className = "swatch";
-      swatch.style.background = state.colors[i] || defaultPalette[i % defaultPalette.length];
-      swatch.title = isPerPoint
+      swatch.style.background =
+        state.colors[i] || defaultPalette[i % defaultPalette.length];
+      swatch.title = isPerRow
         ? state.rows[i]
           ? `Color for row ${i + 1}`
           : `Color ${i + 1}`
-        : "Series color";
+        : `Color for ${state.headers[state.seriesIndices[i]] || `series ${i + 1}`}`;
 
       const input = document.createElement("input");
       input.type = "color";
-      input.value = normalizeHex(state.colors[i] || defaultPalette[i % defaultPalette.length]);
+      input.value = normalizeHex(
+        state.colors[i] || defaultPalette[i % defaultPalette.length]
+      );
       input.addEventListener("input", (e) => {
         state.colors[i] = e.target.value;
         swatch.style.background = e.target.value;
@@ -504,18 +542,33 @@
     return uiType;
   }
 
+  // Circular types inherently show composition of a single series.
+  const SINGLE_SERIES_TYPES = new Set(["doughnut", "pie", "polarArea"]);
+  // Types where stacking makes sense.
+  const STACKABLE_TYPES = new Set(["bar", "bar-horizontal", "area"]);
+
+  function updateStackToggleVisibility() {
+    const uiType = document.getElementById("chartTypeSelect").value;
+    const wrap = document.getElementById("stackToggleWrap");
+    wrap.hidden = !STACKABLE_TYPES.has(uiType);
+  }
+
   function renderExplorerChart() {
     applyFontDefaults();
+    updateStackToggleVisibility();
 
     const xIdx = Number(document.getElementById("xAxisSelect").value);
-    const yIdx = Number(document.getElementById("yAxisSelect").value);
     const uiType = document.getElementById("chartTypeSelect").value;
+
+    // Circular types only support one Y column; truncate if the user has more selected.
+    const effectiveSeries = SINGLE_SERIES_TYPES.has(uiType)
+      ? state.seriesIndices.slice(0, 1)
+      : [...state.seriesIndices];
 
     if (
       Number.isNaN(xIdx) ||
-      Number.isNaN(yIdx) ||
       !state.headers[xIdx] ||
-      !state.headers[yIdx] ||
+      effectiveSeries.length === 0 ||
       state.rows.length === 0
     ) {
       if (state.chart) {
@@ -529,144 +582,172 @@
     const ctx = document.getElementById("explorerChart");
     if (state.chart) state.chart.destroy();
 
+    const chartJsType = resolveChartJsType(uiType);
     const labels = state.rows.map((r) => String(r[xIdx] ?? ""));
-    const values = state.rows.map((r) => {
-      const v = r[yIdx];
-      return typeof v === "number" ? v : Number(v) || 0;
-    });
-
-    const perPoint = PER_POINT_TYPES.has(uiType);
+    const seriesCount = effectiveSeries.length;
+    const isPerRow = PER_POINT_TYPES.has(uiType) && seriesCount === 1;
     const pointColors = labels.map(
       (_, i) => state.colors[i] || defaultPalette[i % defaultPalette.length]
     );
-    const seriesColor = state.colors[0] || defaultPalette[0];
-    const chartJsType = resolveChartJsType(uiType);
+    const seriesColorFor = (i) =>
+      state.colors[i] || defaultPalette[i % defaultPalette.length];
+    const stacked =
+      STACKABLE_TYPES.has(uiType) &&
+      document.getElementById("stackToggle").checked &&
+      seriesCount > 1;
 
     // Base options
     let options = NO_SCALE_TYPES.has(uiType) ? noScaleOptions() : baseOptions();
-    // Hide legend for single-series types with axes; show for circular/radar.
-    if (!NO_SCALE_TYPES.has(uiType)) {
-      options.plugins = { ...options.plugins, legend: { display: false } };
-    }
+    // Show the legend whenever there's more than one series, or for shape types.
+    const showLegend = seriesCount > 1 || NO_SCALE_TYPES.has(uiType);
+    options.plugins = {
+      ...options.plugins,
+      legend: { display: showLegend, labels: { color: "#c9d1ff" } },
+    };
+    if (uiType === "bar-horizontal") options.indexAxis = "y";
+    if (uiType === "doughnut") options.cutout = "60%";
 
-    // Build dataset + per-type tweaks
-    let data;
-    const dataset = {
-      label: state.headers[yIdx],
-      data: values,
-      backgroundColor: perPoint
-        ? pointColors
-        : hexWithAlpha(seriesColor, 0.18),
-      borderColor: perPoint
-        ? chartJsType === "doughnut" || chartJsType === "pie"
-          ? "#161d3d"
-          : pointColors
-        : seriesColor,
-      borderWidth: 2,
-      pointBackgroundColor: seriesColor,
+    // Build datasets, one per selected Y column.
+    const buildBar = (yIdx, i) => {
+      const color = seriesColorFor(i);
+      const values = state.rows.map((r) => Number(r[yIdx]) || 0);
+      return {
+        label: state.headers[yIdx],
+        data: values,
+        backgroundColor: isPerRow ? pointColors : color,
+        borderColor: isPerRow ? pointColors : color,
+        borderWidth: 0,
+        borderRadius: 6,
+      };
     };
 
-    switch (uiType) {
-      case "bar":
-        dataset.borderRadius = 6;
-        break;
+    const buildLine = (yIdx, i, variant) => {
+      const color = seriesColorFor(i);
+      const values = state.rows.map((r) => Number(r[yIdx]) || 0);
+      const ds = {
+        label: state.headers[yIdx],
+        data: values,
+        borderColor: color,
+        backgroundColor: hexWithAlpha(color, 0.28),
+        pointBackgroundColor: color,
+        borderWidth: 2,
+        pointRadius: 3,
+      };
+      if (variant === "line") {
+        ds.tension = 0.35;
+        ds.fill = false;
+      } else if (variant === "line-straight") {
+        ds.tension = 0;
+        ds.fill = false;
+      } else if (variant === "line-stepped") {
+        ds.stepped = true;
+        ds.fill = false;
+      } else if (variant === "area") {
+        ds.tension = 0.35;
+        ds.fill = stacked ? (i === 0 ? "origin" : "-1") : "origin";
+      }
+      return ds;
+    };
 
-      case "bar-horizontal":
-        dataset.borderRadius = 6;
-        options.indexAxis = "y";
-        break;
+    const buildRadar = (yIdx, i) => {
+      const color = seriesColorFor(i);
+      const values = state.rows.map((r) => Number(r[yIdx]) || 0);
+      return {
+        label: state.headers[yIdx],
+        data: values,
+        borderColor: color,
+        backgroundColor: hexWithAlpha(color, 0.25),
+        pointBackgroundColor: color,
+        borderWidth: 2,
+        pointRadius: 3,
+        fill: true,
+      };
+    };
 
-      case "line":
-        dataset.tension = 0.35;
-        dataset.fill = false;
-        dataset.pointRadius = 3;
-        break;
+    const buildCircular = (yIdx) => {
+      const values = state.rows.map((r) => Number(r[yIdx]) || 0);
+      if (uiType === "polarArea") {
+        return {
+          label: state.headers[yIdx],
+          data: values,
+          backgroundColor: pointColors.map((c) => hexWithAlpha(c, 0.55)),
+          borderColor: pointColors,
+          borderWidth: 2,
+        };
+      }
+      return {
+        label: state.headers[yIdx],
+        data: values,
+        backgroundColor: pointColors,
+        borderColor: "#161d3d",
+        borderWidth: 2,
+      };
+    };
 
-      case "line-straight":
-        dataset.tension = 0;
-        dataset.fill = false;
-        dataset.pointRadius = 3;
-        break;
+    let data;
 
-      case "line-stepped":
-        dataset.stepped = true;
-        dataset.fill = false;
-        dataset.pointRadius = 3;
-        break;
-
-      case "area":
-        dataset.tension = 0.35;
-        dataset.fill = true;
-        dataset.pointRadius = 3;
-        dataset.backgroundColor = hexWithAlpha(seriesColor, 0.28);
-        break;
-
-      case "doughnut":
-        options.cutout = "60%";
-        break;
-
-      case "pie":
-        // default cutout 0 (full pie)
-        break;
-
-      case "polarArea":
-        // per-point colors handled above; make them translucent for the fill.
-        dataset.backgroundColor = pointColors.map((c) => hexWithAlpha(c, 0.55));
-        dataset.borderColor = pointColors;
-        break;
-
-      case "radar":
-        dataset.fill = true;
-        dataset.backgroundColor = hexWithAlpha(seriesColor, 0.25);
-        dataset.borderColor = seriesColor;
-        dataset.pointBackgroundColor = seriesColor;
-        dataset.pointRadius = 3;
-        break;
-
-      case "scatter": {
-        // Scatter needs numeric X and Y. Fall back to row index if X is not numeric.
-        const xNumeric = state.rows.every(
-          (r) => r[xIdx] === "" || !Number.isNaN(Number(r[xIdx]))
-        );
-        const points = state.rows.map((r, i) => ({
-          x: xNumeric ? Number(r[xIdx]) || 0 : i + 1,
+    if (uiType === "scatter") {
+      const xNumeric = state.rows.every(
+        (r) => r[xIdx] === "" || !Number.isNaN(Number(r[xIdx]))
+      );
+      const datasets = effectiveSeries.map((yIdx, i) => {
+        const color = seriesColorFor(i);
+        const points = state.rows.map((r, ri) => ({
+          x: xNumeric ? Number(r[xIdx]) || 0 : ri + 1,
           y: Number(r[yIdx]) || 0,
         }));
-        dataset.data = points;
-        dataset.showLine = false;
-        dataset.pointRadius = 5;
-        dataset.pointHoverRadius = 7;
-        dataset.backgroundColor = hexWithAlpha(seriesColor, 0.75);
-        dataset.borderColor = seriesColor;
-        // Use numeric axes.
-        options.scales = {
-          x: {
-            type: "linear",
-            position: "bottom",
-            ticks: { color: "#9aa4c7" },
-            grid: { color: "rgba(255,255,255,0.05)" },
-            title: {
-              display: true,
-              text: xNumeric ? state.headers[xIdx] : "Row #",
-              color: "#9aa4c7",
-            },
-          },
-          y: {
-            ticks: { color: "#9aa4c7" },
-            grid: { color: "rgba(255,255,255,0.05)" },
-            title: {
-              display: true,
-              text: state.headers[yIdx],
-              color: "#9aa4c7",
-            },
-          },
+        return {
+          label: state.headers[yIdx],
+          data: points,
+          showLine: false,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          backgroundColor: hexWithAlpha(color, 0.75),
+          borderColor: color,
         };
-        data = { datasets: [dataset] };
-        break;
-      }
+      });
+      options.scales = {
+        x: {
+          type: "linear",
+          position: "bottom",
+          ticks: { color: "#9aa4c7" },
+          grid: { color: "rgba(255,255,255,0.05)" },
+          title: {
+            display: true,
+            text: xNumeric ? state.headers[xIdx] : "Row #",
+            color: "#9aa4c7",
+          },
+        },
+        y: {
+          ticks: { color: "#9aa4c7" },
+          grid: { color: "rgba(255,255,255,0.05)" },
+          title: {
+            display: true,
+            text:
+              seriesCount === 1 ? state.headers[effectiveSeries[0]] : "Value",
+            color: "#9aa4c7",
+          },
+        },
+      };
+      data = { datasets };
+    } else {
+      const datasets = effectiveSeries.map((yIdx, i) => {
+        if (uiType === "bar" || uiType === "bar-horizontal") return buildBar(yIdx, i);
+        if (LINE_VARIANTS.has(uiType)) return buildLine(yIdx, i, uiType);
+        if (uiType === "radar") return buildRadar(yIdx, i);
+        if (SINGLE_SERIES_TYPES.has(uiType)) return buildCircular(yIdx);
+        return buildBar(yIdx, i); // fallback
+      });
+      data = { labels, datasets };
     }
 
-    if (!data) data = { labels, datasets: [dataset] };
+    // Apply stacking to the relevant scale.
+    if (stacked && options.scales) {
+      options.scales = {
+        x: { ...options.scales.x, stacked: true },
+        y: { ...options.scales.y, stacked: true },
+      };
+    }
 
     state.chart = new Chart(ctx, {
       type: chartJsType,
@@ -674,8 +755,15 @@
       options,
     });
 
+    // Title
+    const yLabel =
+      effectiveSeries.length === 1
+        ? state.headers[effectiveSeries[0]]
+        : effectiveSeries.length === 2
+          ? effectiveSeries.map((i) => state.headers[i]).join(" & ")
+          : `${effectiveSeries.length} series`;
     document.getElementById("explorerTitle").textContent =
-      `${state.headers[yIdx]} by ${state.headers[xIdx]}`;
+      `${yLabel} by ${state.headers[xIdx]}`;
   }
 
   function hexWithAlpha(hex, alpha) {
@@ -775,19 +863,20 @@
 
     setDataset(SAMPLE);
 
-    // Axis + chart type
+    // Axis + chart type (Y is handled via the pills UI in toggleSeries)
     document
       .getElementById("xAxisSelect")
       .addEventListener("change", renderExplorerChart);
     document
-      .getElementById("yAxisSelect")
-      .addEventListener("change", renderExplorerChart);
-    document
       .getElementById("chartTypeSelect")
       .addEventListener("change", () => {
+        updateStackToggleVisibility();
         renderColorSwatches();
         renderExplorerChart();
       });
+    document
+      .getElementById("stackToggle")
+      .addEventListener("change", renderExplorerChart);
 
     // Font controls
     document
@@ -824,8 +913,12 @@
     // Reset palette
     document.getElementById("resetColorsBtn").addEventListener("click", () => {
       state.colors = [...defaultPalette];
-      // pad if needed
-      while (state.colors.length < state.rows.length) {
+      const needed = Math.max(
+        state.rows.length,
+        state.seriesIndices.length,
+        defaultPalette.length
+      );
+      while (state.colors.length < needed) {
         state.colors.push(
           defaultPalette[state.colors.length % defaultPalette.length]
         );

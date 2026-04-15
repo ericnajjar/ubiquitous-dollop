@@ -327,7 +327,7 @@ select:focus {
 
 .control-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 12px;
 }
 
@@ -340,6 +340,74 @@ select:focus {
 .field label {
   font-size: 13px;
   color: var(--muted);
+}
+
+/* Y-axis multi-select pills */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 38px;
+  max-height: 110px;
+  overflow-y: auto;
+}
+
+.pill {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s,
+    transform 0.1s ease;
+  font-family: inherit;
+}
+
+.pill:hover {
+  color: var(--text);
+  border-color: rgba(110, 168, 255, 0.4);
+}
+
+.pill.active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(110, 168, 255, 0.18);
+}
+
+.pill.active::before {
+  content: "✓ ";
+  color: var(--accent);
+}
+
+.pill:active {
+  transform: translateY(1px);
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+/* Inline toggle (e.g. Stack checkbox) */
+.inline-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.inline-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* Color picker */
