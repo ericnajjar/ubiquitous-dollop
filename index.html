@@ -80,9 +80,25 @@
                 <label>
                   Type
                   <select id="chartTypeSelect">
-                    <option value="bar">Bar</option>
-                    <option value="line">Line</option>
-                    <option value="doughnut">Doughnut</option>
+                    <optgroup label="Bar">
+                      <option value="bar">Vertical bar</option>
+                      <option value="bar-horizontal">Horizontal bar</option>
+                    </optgroup>
+                    <optgroup label="Line">
+                      <option value="line">Smooth line</option>
+                      <option value="line-straight">Straight line</option>
+                      <option value="line-stepped">Stepped line</option>
+                      <option value="area">Area</option>
+                    </optgroup>
+                    <optgroup label="Circular">
+                      <option value="doughnut">Doughnut</option>
+                      <option value="pie">Pie</option>
+                      <option value="polarArea">Polar area</option>
+                    </optgroup>
+                    <optgroup label="Other">
+                      <option value="radar">Radar</option>
+                      <option value="scatter">Scatter plot</option>
+                    </optgroup>
                   </select>
                 </label>
                 <button type="button" class="btn btn-ghost btn-sm" id="exportPngBtn">
@@ -103,6 +119,25 @@
               <div class="field">
                 <label for="yAxisSelect">Values (Y axis)</label>
                 <select id="yAxisSelect"></select>
+              </div>
+              <div class="field">
+                <label for="fontFamilySelect">Font</label>
+                <select id="fontFamilySelect">
+                  <option value='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'>System</option>
+                  <option value='"Helvetica Neue", Arial, sans-serif'>Sans-serif</option>
+                  <option value='Georgia, "Times New Roman", serif'>Serif</option>
+                  <option value='Menlo, Consolas, "Courier New", monospace'>Monospace</option>
+                  <option value='"Comic Sans MS", "Chalkboard SE", cursive'>Casual</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fontSizeSelect">Font size</label>
+                <select id="fontSizeSelect">
+                  <option value="11">Small</option>
+                  <option value="13" selected>Medium</option>
+                  <option value="16">Large</option>
+                  <option value="20">Extra large</option>
+                </select>
               </div>
             </div>
 
