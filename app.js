@@ -46,9 +46,22 @@
     return o;
   }
 
+  // ---------- Font ----------
+  // Keep showcase charts so font changes propagate to them too.
+  const showcaseCharts = [];
+
+  function applyFontDefaults() {
+    const familySel = document.getElementById("fontFamilySelect");
+    const sizeSel = document.getElementById("fontSizeSelect");
+    if (!familySel || !sizeSel) return;
+    if (typeof Chart === "undefined") return;
+    Chart.defaults.font.family = familySel.value;
+    Chart.defaults.font.size = Number(sizeSel.value) || 13;
+  }
+
   // ---------- Section 1: example charts ----------
   function renderExamples() {
-    new Chart(document.getElementById("exampleBar"), {
+    showcaseCharts.push(new Chart(document.getElementById("exampleBar"), {
       type: "bar",
       data: {
         labels: ["Q1", "Q2", "Q3", "Q4"],
@@ -68,9 +81,9 @@
           legend: { display: false },
         },
       },
-    });
+    }));
 
-    new Chart(document.getElementById("exampleLine"), {
+    showcaseCharts.push(new Chart(document.getElementById("exampleLine"), {
       type: "line",
       data: {
         labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
@@ -93,9 +106,9 @@
           legend: { display: false },
         },
       },
-    });
+    }));
 
-    new Chart(document.getElementById("exampleDoughnut"), {
+    showcaseCharts.push(new Chart(document.getElementById("exampleDoughnut"), {
       type: "doughnut",
       data: {
         labels: ["Organic", "Paid", "Referral", "Social"],
@@ -109,7 +122,7 @@
         ],
       },
       options: { ...noScaleOptions(), cutout: "60%" },
-    });
+    }));
   }
 
   // ---------- Section 2: data explorer ----------
@@ -435,19 +448,19 @@
     wrap.innerHTML = "";
 
     const type = document.getElementById("chartTypeSelect").value;
-    // For bar/doughnut, per-row color. For line, a single series color.
-    const count = type === "line" ? 1 : Math.max(state.rows.length, 1);
+    // Per-row colors for categorical types; a single series color otherwise.
+    const isPerPoint = PER_POINT_TYPES.has(type);
+    const count = isPerPoint ? Math.max(state.rows.length, 1) : 1;
 
     for (let i = 0; i < count; i++) {
       const swatch = document.createElement("label");
       swatch.className = "swatch";
       swatch.style.background = state.colors[i] || defaultPalette[i % defaultPalette.length];
-      swatch.title =
-        type === "line"
-          ? "Series color"
-          : state.rows[i]
-            ? `Color for row ${i + 1}`
-            : `Color ${i + 1}`;
+      swatch.title = isPerPoint
+        ? state.rows[i]
+          ? `Color for row ${i + 1}`
+          : `Color ${i + 1}`
+        : "Series color";
 
       const input = document.createElement("input");
       input.type = "color";
@@ -471,10 +484,32 @@
   }
 
   // ---------- Rendering: chart ----------
+  // Types that color each data point individually (categorical look).
+  const PER_POINT_TYPES = new Set([
+    "bar",
+    "bar-horizontal",
+    "doughnut",
+    "pie",
+    "polarArea",
+  ]);
+  // Types whose Chart.js type is "line" but with tweaks.
+  const LINE_VARIANTS = new Set(["line", "line-straight", "line-stepped", "area"]);
+  // Types that use no x/y scales.
+  const NO_SCALE_TYPES = new Set(["doughnut", "pie", "polarArea", "radar"]);
+
+  // Resolve our UI value into the Chart.js `type` string.
+  function resolveChartJsType(uiType) {
+    if (uiType === "bar-horizontal" || uiType === "bar") return "bar";
+    if (LINE_VARIANTS.has(uiType)) return "line";
+    return uiType;
+  }
+
   function renderExplorerChart() {
+    applyFontDefaults();
+
     const xIdx = Number(document.getElementById("xAxisSelect").value);
     const yIdx = Number(document.getElementById("yAxisSelect").value);
-    const type = document.getElementById("chartTypeSelect").value;
+    const uiType = document.getElementById("chartTypeSelect").value;
 
     if (
       Number.isNaN(xIdx) ||
@@ -491,47 +526,151 @@
       return;
     }
 
+    const ctx = document.getElementById("explorerChart");
+    if (state.chart) state.chart.destroy();
+
     const labels = state.rows.map((r) => String(r[xIdx] ?? ""));
     const values = state.rows.map((r) => {
       const v = r[yIdx];
       return typeof v === "number" ? v : Number(v) || 0;
     });
 
-    const ctx = document.getElementById("explorerChart");
-    if (state.chart) state.chart.destroy();
-
-    const perPoint = type === "bar" || type === "doughnut";
-    const colors = labels.map(
+    const perPoint = PER_POINT_TYPES.has(uiType);
+    const pointColors = labels.map(
       (_, i) => state.colors[i] || defaultPalette[i % defaultPalette.length]
     );
     const seriesColor = state.colors[0] || defaultPalette[0];
+    const chartJsType = resolveChartJsType(uiType);
 
+    // Base options
+    let options = NO_SCALE_TYPES.has(uiType) ? noScaleOptions() : baseOptions();
+    // Hide legend for single-series types with axes; show for circular/radar.
+    if (!NO_SCALE_TYPES.has(uiType)) {
+      options.plugins = { ...options.plugins, legend: { display: false } };
+    }
+
+    // Build dataset + per-type tweaks
+    let data;
     const dataset = {
       label: state.headers[yIdx],
       data: values,
-      backgroundColor: perPoint ? colors : hexWithAlpha(seriesColor, 0.18),
-      borderColor: perPoint ? (type === "doughnut" ? "#161d3d" : colors) : seriesColor,
-      borderWidth: type === "doughnut" ? 2 : 2,
-      borderRadius: type === "bar" ? 6 : 0,
-      tension: 0.35,
-      fill: type === "line",
-      pointRadius: type === "line" ? 3 : 0,
+      backgroundColor: perPoint
+        ? pointColors
+        : hexWithAlpha(seriesColor, 0.18),
+      borderColor: perPoint
+        ? chartJsType === "doughnut" || chartJsType === "pie"
+          ? "#161d3d"
+          : pointColors
+        : seriesColor,
+      borderWidth: 2,
       pointBackgroundColor: seriesColor,
     };
 
-    const options =
-      type === "doughnut" ? { ...noScaleOptions(), cutout: "60%" } : baseOptions();
+    switch (uiType) {
+      case "bar":
+        dataset.borderRadius = 6;
+        break;
 
-    if (type !== "doughnut") {
-      options.plugins = {
-        ...options.plugins,
-        legend: { display: false },
-      };
+      case "bar-horizontal":
+        dataset.borderRadius = 6;
+        options.indexAxis = "y";
+        break;
+
+      case "line":
+        dataset.tension = 0.35;
+        dataset.fill = false;
+        dataset.pointRadius = 3;
+        break;
+
+      case "line-straight":
+        dataset.tension = 0;
+        dataset.fill = false;
+        dataset.pointRadius = 3;
+        break;
+
+      case "line-stepped":
+        dataset.stepped = true;
+        dataset.fill = false;
+        dataset.pointRadius = 3;
+        break;
+
+      case "area":
+        dataset.tension = 0.35;
+        dataset.fill = true;
+        dataset.pointRadius = 3;
+        dataset.backgroundColor = hexWithAlpha(seriesColor, 0.28);
+        break;
+
+      case "doughnut":
+        options.cutout = "60%";
+        break;
+
+      case "pie":
+        // default cutout 0 (full pie)
+        break;
+
+      case "polarArea":
+        // per-point colors handled above; make them translucent for the fill.
+        dataset.backgroundColor = pointColors.map((c) => hexWithAlpha(c, 0.55));
+        dataset.borderColor = pointColors;
+        break;
+
+      case "radar":
+        dataset.fill = true;
+        dataset.backgroundColor = hexWithAlpha(seriesColor, 0.25);
+        dataset.borderColor = seriesColor;
+        dataset.pointBackgroundColor = seriesColor;
+        dataset.pointRadius = 3;
+        break;
+
+      case "scatter": {
+        // Scatter needs numeric X and Y. Fall back to row index if X is not numeric.
+        const xNumeric = state.rows.every(
+          (r) => r[xIdx] === "" || !Number.isNaN(Number(r[xIdx]))
+        );
+        const points = state.rows.map((r, i) => ({
+          x: xNumeric ? Number(r[xIdx]) || 0 : i + 1,
+          y: Number(r[yIdx]) || 0,
+        }));
+        dataset.data = points;
+        dataset.showLine = false;
+        dataset.pointRadius = 5;
+        dataset.pointHoverRadius = 7;
+        dataset.backgroundColor = hexWithAlpha(seriesColor, 0.75);
+        dataset.borderColor = seriesColor;
+        // Use numeric axes.
+        options.scales = {
+          x: {
+            type: "linear",
+            position: "bottom",
+            ticks: { color: "#9aa4c7" },
+            grid: { color: "rgba(255,255,255,0.05)" },
+            title: {
+              display: true,
+              text: xNumeric ? state.headers[xIdx] : "Row #",
+              color: "#9aa4c7",
+            },
+          },
+          y: {
+            ticks: { color: "#9aa4c7" },
+            grid: { color: "rgba(255,255,255,0.05)" },
+            title: {
+              display: true,
+              text: state.headers[yIdx],
+              color: "#9aa4c7",
+            },
+          },
+        };
+        data = { datasets: [dataset] };
+        break;
+      }
     }
 
+    if (!data) data = { labels, datasets: [dataset] };
+
     state.chart = new Chart(ctx, {
-      type,
-      data: { labels, datasets: [dataset] },
+      type: chartJsType,
+      data,
       options,
     });
 
@@ -548,10 +687,90 @@
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
+  // ---------- Export ----------
+  // Flatten the chart onto a backing canvas with a solid background, so
+  // exports look right on any host (light or dark).
+  function chartToFlatCanvas(bg = "#161d3d") {
+    if (!state.chart) return null;
+    const src = state.chart.canvas;
+    const out = document.createElement("canvas");
+    out.width = src.width;
+    out.height = src.height;
+    const ctx = out.getContext("2d");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(src, 0, 0);
+    return out;
+  }
+
+  function safeFilename(base) {
+    const slug = String(base || "chart")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+    return slug || "chart";
+  }
+
+  function triggerDownload(href, filename) {
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
+
+  function exportPng() {
+    const canvas = chartToFlatCanvas();
+    if (!canvas) return;
+    const name = safeFilename(
+      document.getElementById("explorerTitle").textContent
+    );
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      triggerDownload(url, `${name}.png`);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, "image/png");
+  }
+
+  function exportSvg() {
+    const canvas = chartToFlatCanvas();
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    const w = canvas.width;
+    const h = canvas.height;
+    // Chart.js renders to canvas, so the SVG embeds the rendered PNG as an
+    // <image>. The file is a valid, scalable SVG — just not pure vector.
+    const svg =
+      `<?xml version="1.0" encoding="UTF-8"?>\n` +
+      `<svg xmlns="http://www.w3.org/2000/svg" ` +
+      `xmlns:xlink="http://www.w3.org/1999/xlink" ` +
+      `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+      `<image width="${w}" height="${h}" href="${dataUrl}"/>` +
+      `</svg>`;
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+    const name = safeFilename(
+      document.getElementById("explorerTitle").textContent
+    );
+    triggerDownload(url, `${name}.svg`);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   // ---------- Wire-up ----------
+  function onFontChange() {
+    applyFontDefaults();
+    // Showcase charts created earlier need to pick up the new defaults.
+    showcaseCharts.forEach((c) => c.update());
+    renderExplorerChart();
+  }
+
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
 
+    applyFontDefaults();
     renderExamples();
 
     setDataset(SAMPLE);
@@ -569,6 +788,14 @@
         renderColorSwatches();
         renderExplorerChart();
       });
+
+    // Font controls
+    document
+      .getElementById("fontFamilySelect")
+      .addEventListener("change", onFontChange);
+    document
+      .getElementById("fontSizeSelect")
+      .addEventListener("change", onFontChange);
 
     // Editor buttons
     document.getElementById("addRowBtn").addEventListener("click", addRow);
@@ -589,6 +816,10 @@
       reader.readAsText(file);
       e.target.value = "";
     });
+
+    // Export
+    document.getElementById("exportPngBtn").addEventListener("click", exportPng);
+    document.getElementById("exportSvgBtn").addEventListener("click", exportSvg);
 
     // Reset palette
     document.getElementById("resetColorsBtn").addEventListener("click", () => {
