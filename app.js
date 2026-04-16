@@ -304,6 +304,26 @@
     renderExplorerChart();
   }
 
+  function flipData() {
+    // Transpose: rows become columns, columns become rows.
+    const fullMatrix = [state.headers, ...state.rows];
+    const maxCols = Math.max(...fullMatrix.map((r) => r.length));
+    const padded = fullMatrix.map((r) => {
+      const row = [...r];
+      while (row.length < maxCols) row.push("");
+      return row;
+    });
+    const transposed = padded[0].map((_, c) => padded.map((r) => r[c]));
+    const newHeaders = transposed[0].map((v) => String(v));
+    const newRows = transposed.slice(1).map((r) =>
+      r.map((v) => {
+        const num = Number(v);
+        return v !== "" && !Number.isNaN(num) ? num : v;
+      })
+    );
+    setDataset({ headers: newHeaders, rows: newRows });
+  }
+
   function updateCell(rowIdx, colIdx, raw) {
     const num = Number(raw);
     state.rows[rowIdx][colIdx] =
@@ -895,6 +915,9 @@
     document
       .getElementById("loadSampleBtn")
       .addEventListener("click", () => setDataset(SAMPLE));
+    document
+      .getElementById("flipDataBtn")
+      .addEventListener("click", flipData);
 
     // CSV upload
     document.getElementById("csvInput").addEventListener("change", (e) => {

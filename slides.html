@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Slide Decks</title>
+  <link rel="stylesheet" href="slides.css" />
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js" defer></script>
+  <script src="slides.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="slides.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope Slides</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Charts</a>
+        <a href="slides.html" class="active">Slide decks</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="app">
+    <!-- Slide list sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h3>Slides</h3>
+        <button type="button" class="btn btn-ghost btn-sm" id="addSlideBtn">+ Add</button>
+      </div>
+      <ol class="slide-list" id="slideList"></ol>
+    </aside>
+
+    <!-- Main area -->
+    <section class="main-area">
+      <!-- Slide preview -->
+      <div class="slide-stage">
+        <div class="slide-frame" id="slideFrame">
+          <div class="slide-preview" id="slidePreview"></div>
+        </div>
+        <div class="slide-nav">
+          <button type="button" class="btn btn-ghost btn-sm" id="prevSlideBtn">← Prev</button>
+          <span class="slide-counter" id="slideCounter">1 / 1</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="nextSlideBtn">Next →</button>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls-panel">
+        <div class="control-group">
+          <div class="field">
+            <label for="templateSelect">Template</label>
+            <select id="templateSelect"></select>
+          </div>
+          <div class="field">
+            <label for="slideFontSelect">Font</label>
+            <select id="slideFontSelect">
+              <option value='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'>System</option>
+              <option value='"Helvetica Neue", Arial, sans-serif'>Sans-serif</option>
+              <option value='Georgia, "Times New Roman", serif'>Serif</option>
+              <option value='Menlo, Consolas, "Courier New", monospace'>Monospace</option>
+              <option value='"Comic Sans MS", "Chalkboard SE", cursive'>Casual</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="textColorInput">Text color</label>
+            <div class="color-field">
+              <input type="color" id="textColorInput" value="#ffffff" />
+              <span class="color-hex" id="textColorHex">#ffffff</span>
+            </div>
+          </div>
+          <div class="field">
+            <label for="bgColorInput">Background</label>
+            <div class="color-field">
+              <input type="color" id="bgColorInput" value="#1a1a2e" />
+              <span class="color-hex" id="bgColorHex">#1a1a2e</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-group actions-group">
+          <button type="button" class="btn btn-ghost btn-sm" id="duplicateSlideBtn">Duplicate slide</button>
+          <button type="button" class="btn btn-ghost btn-sm danger" id="deleteSlideBtn">Delete slide</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn btn-ghost btn-sm" id="exportPngSlideBtn">Export slide PNG</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="exportAllPngBtn">Export all PNGs</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="exportHtmlBtn">Export HTML deck</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="printBtn">Print / PDF</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Template-based slide decks.</p>
+      <p class="muted">All processing happens locally in your browser.</p>
+    </div>
+  </footer>
+</body>
+</html>
