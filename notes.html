@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Notes</title>
+  <link rel="stylesheet" href="notes.css" />
+  <script src="notes.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="notes.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope Notes</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Charts</a>
+        <a href="slides.html">Slides</a>
+        <a href="kanban.html">Board</a>
+        <a href="notes.html" class="active">Notes</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="notes-main">
+    <div class="notes-toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">⌕</span>
+        <input type="text" id="searchInput" placeholder="Search notes…" autocomplete="off" />
+      </div>
+      <div class="toolbar-right">
+        <div class="tag-filters" id="tagFilters"></div>
+        <button type="button" class="btn btn-primary btn-sm" id="newNoteBtn">+ New note</button>
+      </div>
+    </div>
+
+    <div class="notes-grid" id="notesGrid"></div>
+    <p class="empty-state" id="emptyState" hidden>No notes yet. Click "+ New note" to start.</p>
+  </main>
+
+  <!-- Note modal (expanded edit) -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" id="noteModal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <input type="text" id="noteTitleInput" class="title-input" placeholder="Title (optional)" />
+        <div class="modal-header-actions">
+          <div class="color-palette" id="colorPalette"></div>
+          <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <textarea id="noteBodyInput" placeholder="Write anything…"></textarea>
+      </div>
+      <div class="modal-footer">
+        <div class="field">
+          <input type="text" id="noteTagsInput" placeholder="Tags: work, personal…" class="tags-input" autocomplete="off" />
+        </div>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm danger" id="deleteNoteBtn">Delete</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="modalSave">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Saved in your browser.</p>
+    </div>
+  </footer>
+</body>
+</html>

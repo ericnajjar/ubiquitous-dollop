@@ -17,8 +17,10 @@
         <span class="brand-text">DataScope</span>
       </a>
       <nav class="site-nav">
-        <a href="#showcase">What you can do</a>
-        <a href="#explorer">Data explorer</a>
+        <a href="#showcase">Charts</a>
+        <a href="slides.html">Slides</a>
+        <a href="kanban.html">Board</a>
+        <a href="notes.html">Notes</a>
       </nav>
     </div>
   </header>
@@ -101,6 +103,10 @@
                     </optgroup>
                   </select>
                 </label>
+                <label class="inline-toggle" id="stackToggleWrap" hidden>
+                  <input type="checkbox" id="stackToggle" />
+                  Stack
+                </label>
                 <button type="button" class="btn btn-ghost btn-sm" id="exportPngBtn">
                   Export PNG
                 </button>
@@ -112,13 +118,13 @@
             <div class="chart-wrap large"><canvas id="explorerChart"></canvas></div>
 
             <div class="control-row">
+              <div class="field field-wide">
+                <label for="yAxisPills">Values (Y axes — click to toggle)</label>
+                <div id="yAxisPills" class="pills" role="group" aria-label="Select Y-axis columns"></div>
+              </div>
               <div class="field">
                 <label for="xAxisSelect">Labels (X axis)</label>
                 <select id="xAxisSelect"></select>
-              </div>
-              <div class="field">
-                <label for="yAxisSelect">Values (Y axis)</label>
-                <select id="yAxisSelect"></select>
               </div>
               <div class="field">
                 <label for="fontFamilySelect">Font</label>
@@ -164,6 +170,9 @@
                 </button>
                 <button type="button" class="btn btn-ghost btn-sm" id="clearDataBtn">
                   Clear
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm" id="flipDataBtn" title="Transpose rows and columns">
+                  ↕ Flip
                 </button>
               </div>
             </div>

@@ -11,9 +11,14 @@ browser — there's no build step and no server.
 2. **Data explorer** — a live chart paired with an editable data grid.
    - Edit any cell, rename columns, add/remove rows and columns
    - Upload a CSV or load the sample dataset
-   - Pick the labels column and values column
-   - Switch between bar, line, and doughnut
-   - Customize per-bar / per-slice colors (or the line color) with color pickers
+   - Pick one X column (labels) and *multiple* Y columns (values) — each
+     Y column becomes its own series
+   - Chart types: vertical/horizontal bar, smooth/straight/stepped line,
+     area, doughnut, pie, polar area, radar, scatter plot
+   - Stack toggle for bar and area with multiple series
+   - Pick a font family and size — applies to every chart on the page
+   - Customize per-series (or per-row, when single-series) colors
+   - Export the chart as PNG or SVG
 
 ## Run it
 
