@@ -98,6 +98,22 @@
   font-size: 11px;
   color: #4ade80;
 }
+.mascot-picker-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+.mascot-picker-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
 .mascot-panel-close {
   width: 28px;
   height: 28px;
@@ -113,6 +129,60 @@
 }
 .mascot-panel-close:hover {
   background: rgba(255, 255, 255, 0.08);
+  color: #e7ecff;
+}
+
+/* Character picker */
+.mascot-picker {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 16, 32, 0.5);
+  overflow-x: auto;
+}
+.mascot-picker[hidden] { display: none; }
+.mascot-pick-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.mascot-pick-option:hover {
+  background: rgba(110, 168, 255, 0.08);
+  border-color: rgba(110, 168, 255, 0.2);
+}
+.mascot-pick-option.active {
+  border-color: #6ea8ff;
+  background: rgba(110, 168, 255, 0.12);
+}
+.mascot-pick-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6ea8ff, #8b5cf6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mascot-pick-avatar svg {
+  width: 22px;
+  height: 22px;
+}
+.mascot-pick-name {
+  font-size: 10px;
+  color: #9aa4c7;
+  font-weight: 600;
+}
+.mascot-pick-option.active .mascot-pick-name {
   color: #e7ecff;
 }
 

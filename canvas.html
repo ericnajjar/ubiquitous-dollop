@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Canvas</title>
+  <link rel="stylesheet" href="canvas.css" />
+  <link rel="stylesheet" href="mascot.css" />
+  <script src="canvas-app.js" defer></script>
+  <script src="mascot.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="canvas.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope Canvas</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Charts</a>
+        <a href="slides.html">Slides</a>
+        <a href="kanban.html">Board</a>
+        <a href="notes.html">Notes</a>
+        <a href="canvas.html" class="active">Canvas</a>
+        <a href="projects.html">Projects</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="canvas-app">
+    <aside class="canvas-toolbar" id="toolbar">
+      <div class="tool-group">
+        <button class="tool-btn active" data-tool="select" title="Select & Move (V)">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M4 2 L4 16 L8 12 L12 18 L14 17 L10 11 L15 11 Z" fill="currentColor"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
+          <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="circle" title="Circle (C)">
+          <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="diamond" title="Diamond (D)">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M10 2 L18 10 L10 18 L2 10 Z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="text" title="Text (T)">
+          <svg viewBox="0 0 20 20" fill="none"><text x="4" y="15" font-size="14" font-weight="700" fill="currentColor">T</text></svg>
+        </button>
+        <button class="tool-btn" data-tool="arrow" title="Arrow / Connect (A)">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M3 17 L15 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M10 4 L16 4 L16 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+        </button>
+      </div>
+      <div class="tool-divider"></div>
+      <div class="tool-group">
+        <div class="tool-field">
+          <label>Fill</label>
+          <input type="color" id="fillColor" value="#1d254a" />
+        </div>
+        <div class="tool-field">
+          <label>Stroke</label>
+          <input type="color" id="strokeColor" value="#6ea8ff" />
+        </div>
+      </div>
+      <div class="tool-divider"></div>
+      <div class="tool-group">
+        <button class="tool-btn" id="deleteBtn" title="Delete (Del)">
+          <svg viewBox="0 0 20 20" fill="none"><path d="M5 6 L15 6 L14 17 H6 Z" stroke="currentColor" stroke-width="1.3" fill="none"/><line x1="3" y1="6" x2="17" y2="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 3 H12 V6 H8 Z" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
+        </button>
+        <button class="tool-btn" id="clearBtn" title="Clear all">
+          <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.3" fill="none"/><line x1="6" y1="6" x2="14" y2="14" stroke="currentColor" stroke-width="1.3"/></svg>
+        </button>
+      </div>
+      <div class="tool-spacer"></div>
+      <div class="zoom-controls">
+        <button class="tool-btn" id="zoomOutBtn" title="Zoom out">−</button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button class="tool-btn" id="zoomInBtn" title="Zoom in">+</button>
+      </div>
+    </aside>
+
+    <div class="canvas-viewport" id="viewport">
+      <canvas id="canvas"></canvas>
+      <textarea id="textEditor" class="text-editor" hidden></textarea>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Saved in your browser.</p>
+    </div>
+  </footer>
+</body>
+</html>
