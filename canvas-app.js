@@ -22,6 +22,8 @@
   let arrowStart = null; // shape id for arrow source
   let panning = false;
   let panLast = { x: 0, y: 0 };
+  let snapGuides = [];
+  const SNAP_THRESHOLD = 8;
 
   let canvas, ctx;
 
@@ -53,6 +55,41 @@
 
   function worldToScreen(wx, wy) {
     return { x: wx * state.zoom + state.pan.x, y: wy * state.zoom + state.pan.y };
+  }
+
+  // ---------- Snap alignment ----------
+  function computeSnap(shape) {
+    snapGuides = [];
+    const movingX = [shape.x, shape.x + shape.w / 2, shape.x + shape.w];
+    const movingY = [shape.y, shape.y + shape.h / 2, shape.y + shape.h];
+    let bestDx = SNAP_THRESHOLD, bestDy = SNAP_THRESHOLD;
+    let snapX = null, snapY = null, guideX = null, guideY = null;
+
+    for (const other of state.shapes) {
+      if (other.id === shape.id) continue;
+      const otherX = [other.x, other.x + other.w / 2, other.x + other.w];
+      const otherY = [other.y, other.y + other.h / 2, other.y + other.h];
+
+      for (let m = 0; m < 3; m++) {
+        for (let o = 0; o < 3; o++) {
+          const dx = Math.abs(movingX[m] - otherX[o]);
+          if (dx < bestDx) {
+            bestDx = dx;
+            snapX = otherX[o] - (movingX[m] - shape.x);
+            guideX = otherX[o];
+          }
+          const dy = Math.abs(movingY[m] - otherY[o]);
+          if (dy < bestDy) {
+            bestDy = dy;
+            snapY = otherY[o] - (movingY[m] - shape.y);
+            guideY = otherY[o];
+          }
+        }
+      }
+    }
+
+    if (snapX !== null) { shape.x = snapX; snapGuides.push({ axis: "x", pos: guideX }); }
+    if (snapY !== null) { shape.y = snapY; snapGuides.push({ axis: "y", pos: guideY }); }
   }
 
   // ---------- Hit testing ----------
@@ -144,6 +181,8 @@
     if (creating && creating.type !== "arrow" && creating.w !== undefined) {
       drawShapePreview(creating);
     }
+
+    drawSnapGuides();
 
     ctx.restore();
   }
@@ -304,6 +343,24 @@
     });
   }
 
+  function drawSnapGuides() {
+    if (!snapGuides.length) return;
+    const topLeft = screenToWorld(0, 0);
+    const bottomRight = screenToWorld(canvas.width, canvas.height);
+    ctx.save();
+    ctx.strokeStyle = "#ff44cc";
+    ctx.lineWidth = 1 / state.zoom;
+    ctx.setLineDash([4 / state.zoom, 4 / state.zoom]);
+    snapGuides.forEach((g) => {
+      ctx.beginPath();
+      if (g.axis === "x") { ctx.moveTo(g.pos, topLeft.y); ctx.lineTo(g.pos, bottomRight.y); }
+      else { ctx.moveTo(topLeft.x, g.pos); ctx.lineTo(bottomRight.x, g.pos); }
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // ---------- Tool management ----------
   function setTool(tool) {
     state.tool = tool;
@@ -378,6 +435,7 @@
       if (shape) {
         shape.x = world.x - dragOffset.x;
         shape.y = world.y - dragOffset.y;
+        computeSnap(shape);
         draw();
       }
     } else if (creating) {
@@ -401,6 +459,7 @@
 
     if (dragging) {
       dragging = false;
+      snapGuides = [];
       save();
       draw();
       return;
@@ -564,6 +623,59 @@
     document.getElementById("zoomLabel").textContent = Math.round(state.zoom * 100) + "%";
   }
 
+  // ---------- Export ----------
+  function renderToImage(shapes, arrows) {
+    if (!shapes.length) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    shapes.forEach((s) => {
+      minX = Math.min(minX, s.x); minY = Math.min(minY, s.y);
+      maxX = Math.max(maxX, s.x + s.w); maxY = Math.max(maxY, s.y + s.h);
+    });
+    const pad = 40, w = maxX - minX + pad * 2, h = maxY - minY + pad * 2;
+    const off = document.createElement("canvas");
+    off.width = w * 2; off.height = h * 2;
+    const oc = off.getContext("2d");
+    oc.scale(2, 2);
+    oc.fillStyle = "#0f1126";
+    oc.fillRect(0, 0, w, h);
+    oc.translate(pad - minX, pad - minY);
+    const origCtx = ctx;
+    ctx = oc;
+    arrows.forEach((a) => {
+      const from = shapes.find((s) => s.id === a.from);
+      const to = shapes.find((s) => s.id === a.to);
+      if (from && to) drawArrow(from, to, a.color || "#6ea8ff");
+    });
+    shapes.forEach((s) => drawShape(s, false));
+    ctx = origCtx;
+    return off;
+  }
+
+  function exportPng(all) {
+    const shapes = all ? [...state.shapes] : state.shapes.filter((s) => s.id === state.selected);
+    if (!shapes.length) { alert(all ? "Nothing to export." : "Select a shape first."); return; }
+    const ids = new Set(shapes.map((s) => s.id));
+    const arrows = state.arrows.filter((a) => ids.has(a.from) && ids.has(a.to));
+    const off = renderToImage(shapes, arrows);
+    if (!off) return;
+    const link = document.createElement("a");
+    link.download = all ? "canvas-export.png" : "canvas-selection.png";
+    link.href = off.toDataURL("image/png");
+    link.click();
+  }
+
+  function sendToSlides(all) {
+    const shapes = all ? [...state.shapes] : state.shapes.filter((s) => s.id === state.selected);
+    if (!shapes.length) { alert(all ? "Nothing to send." : "Select a shape first."); return; }
+    const ids = new Set(shapes.map((s) => s.id));
+    const arrows = state.arrows.filter((a) => ids.has(a.from) && ids.has(a.to));
+    const off = renderToImage(shapes, arrows);
+    if (!off) return;
+    const title = all ? "Canvas Export" : (shapes[0].label || "Canvas Selection");
+    localStorage.setItem("datascope_chart_to_slides", JSON.stringify({ image: off.toDataURL("image/png"), title }));
+    window.location.href = "slides.html";
+  }
+
   // ---------- Init ----------
   function init() {
     const yearEl = document.getElementById("year");
@@ -620,6 +732,12 @@
       save();
       draw();
     });
+
+    // Export buttons
+    document.getElementById("exportAllPngBtn").addEventListener("click", () => exportPng(true));
+    document.getElementById("exportSelPngBtn").addEventListener("click", () => exportPng(false));
+    document.getElementById("sendAllSlidesBtn").addEventListener("click", () => sendToSlides(true));
+    document.getElementById("sendSelSlidesBtn").addEventListener("click", () => sendToSlides(false));
 
     // Canvas events
     canvas.addEventListener("mousedown", onMouseDown);
