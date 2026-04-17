@@ -19,6 +19,7 @@
         <a href="slides.html">Slides</a>
         <a href="kanban.html">Board</a>
         <a href="notes.html" class="active">Notes</a>
+        <a href="projects.html">Projects</a>
       </nav>
     </div>
   </header>
@@ -59,6 +60,12 @@
         <div class="field">
           <label for="noteDueInput" class="due-label">Due</label>
           <input type="date" id="noteDueInput" class="due-input" />
+        </div>
+        <div class="field">
+          <label for="noteProjectSelect" class="due-label">Project</label>
+          <select id="noteProjectSelect" class="project-select">
+            <option value="">None</option>
+          </select>
         </div>
         <span class="spacer"></span>
         <button type="button" class="btn btn-ghost btn-sm danger" id="deleteNoteBtn">Delete</button>

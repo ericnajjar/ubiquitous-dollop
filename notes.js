@@ -241,6 +241,27 @@
     return { text: `${days} days`, cls: "ok" };
   }
 
+  // ---------- Projects ----------
+  function loadGlobalProjects() {
+    try {
+      const raw = localStorage.getItem("datascope_projects");
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [];
+  }
+
+  function populateProjectSelect(selectedId) {
+    const sel = document.getElementById("noteProjectSelect");
+    sel.innerHTML = '<option value="">None</option>';
+    loadGlobalProjects().forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (p.id === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
   // ---------- Modal ----------
   function openModal(note) {
     state.editingId = note ? note.id : null;
@@ -250,6 +271,7 @@
     document.getElementById("noteBodyInput").value = note?.body || "";
     document.getElementById("noteTagsInput").value = note?.tags?.join(", ") || "";
     document.getElementById("noteDueInput").value = note?.dueDate || "";
+    populateProjectSelect(note?.projectId || "");
     renderColorPalette();
 
     document.getElementById("modalOverlay").hidden = false;
@@ -272,6 +294,7 @@
     const tags = document.getElementById("noteTagsInput").value
       .split(",").map((t) => t.trim()).filter(Boolean);
     const dueDate = document.getElementById("noteDueInput").value || "";
+    const projectId = document.getElementById("noteProjectSelect").value || "";
 
     if (!title && !body) { closeModal(); return; }
 
@@ -284,6 +307,7 @@
         note.body = body;
         note.tags = tags;
         note.dueDate = dueDate;
+        note.projectId = projectId;
         note.colorIdx = state.editingColorIdx;
         note.updatedAt = now;
       }
@@ -294,6 +318,7 @@
         body,
         tags,
         dueDate,
+        projectId,
         colorIdx: state.editingColorIdx,
         pinned: false,
         createdAt: now,

@@ -364,6 +364,26 @@
   let editingCardId = null;
   let editingColId = null;
 
+  function loadGlobalProjects() {
+    try {
+      const raw = localStorage.getItem("datascope_projects");
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [];
+  }
+
+  function populateProjectSelect(selectedId) {
+    const sel = document.getElementById("cardProject");
+    sel.innerHTML = '<option value="">None</option>';
+    loadGlobalProjects().forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (p.id === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
   function openModal(card, colId) {
     editingCardId = card ? card.id : null;
     editingColId = colId;
@@ -387,6 +407,8 @@
       if (c.id === colId) opt.selected = true;
       colSel.appendChild(opt);
     });
+
+    populateProjectSelect(card?.projectId || "");
 
     document.getElementById("modalOverlay").hidden = false;
     document.getElementById("cardTitle").focus();
@@ -415,6 +437,7 @@
       dueDate: dueRaw || "",
       reminder: reminderRaw || "",
       tags,
+      projectId: document.getElementById("cardProject").value || "",
     };
 
     if (editingCardId) {

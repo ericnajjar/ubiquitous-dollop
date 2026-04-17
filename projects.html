@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Projects</title>
+  <link rel="stylesheet" href="projects.css" />
+  <script src="projects.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="projects.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope Projects</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Charts</a>
+        <a href="slides.html">Slides</a>
+        <a href="kanban.html">Board</a>
+        <a href="notes.html">Notes</a>
+        <a href="projects.html" class="active">Projects</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="projects-main">
+    <div class="projects-toolbar">
+      <h1>Projects</h1>
+      <button type="button" class="btn btn-primary btn-sm" id="newProjectBtn">+ New project</button>
+    </div>
+
+    <div class="projects-grid" id="projectsGrid"></div>
+    <p class="empty-state" id="emptyState" hidden>No projects yet. Click "+ New project" to get started.</p>
+  </main>
+
+  <!-- Project detail modal -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" id="projectModal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <input type="text" id="projectNameInput" class="title-input" placeholder="Project name" />
+        <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="projectDescInput">Description</label>
+          <textarea id="projectDescInput" rows="2" placeholder="What is this project about?"></textarea>
+        </div>
+
+        <div class="linked-section">
+          <h3>Charts</h3>
+          <div class="linked-items" id="linkedCharts"></div>
+          <p class="linked-hint">Assign charts from the <a href="index.html">Charts</a> page.</p>
+        </div>
+
+        <div class="linked-section">
+          <h3>Slide Decks</h3>
+          <div class="linked-items" id="linkedDecks"></div>
+          <p class="linked-hint">Assign decks from the <a href="slides.html">Slides</a> page.</p>
+        </div>
+
+        <div class="linked-section">
+          <h3>Board Cards</h3>
+          <div class="linked-items" id="linkedCards"></div>
+          <p class="linked-hint">Assign cards from the <a href="kanban.html">Board</a> page.</p>
+        </div>
+
+        <div class="linked-section">
+          <h3>Notes</h3>
+          <div class="linked-items" id="linkedNotes"></div>
+          <p class="linked-hint">Assign notes from the <a href="notes.html">Notes</a> page.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm danger" id="deleteProjectBtn">Delete project</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="modalCancel">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="modalSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Saved in your browser.</p>
+    </div>
+  </footer>
+</body>
+</html>

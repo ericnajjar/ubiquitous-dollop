@@ -21,6 +21,7 @@
         <a href="slides.html">Slides</a>
         <a href="kanban.html">Board</a>
         <a href="notes.html">Notes</a>
+        <a href="projects.html">Projects</a>
       </nav>
     </div>
   </header>
@@ -117,6 +118,17 @@
                   Send to Slides
                 </button>
               </div>
+            </div>
+            <div class="chart-save-bar">
+              <input type="text" id="chartName" placeholder="Chart name…" autocomplete="off" class="chart-name-input" />
+              <select id="chartProjectSelect" class="saved-charts-select">
+                <option value="">No project</option>
+              </select>
+              <button type="button" class="btn btn-ghost btn-sm" id="saveChartBtn">Save</button>
+              <select id="savedChartsSelect" class="saved-charts-select">
+                <option value="">Load saved chart…</option>
+              </select>
+              <button type="button" class="btn btn-ghost btn-sm danger" id="deleteSavedChartBtn">Delete</button>
             </div>
             <div class="chart-wrap large"><canvas id="explorerChart"></canvas></div>
 

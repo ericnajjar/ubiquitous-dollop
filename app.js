@@ -876,6 +876,129 @@
     window.location.href = "slides.html";
   }
 
+  // ---------- Saved charts ----------
+  const SAVED_CHARTS_KEY = "datascope_saved_charts";
+
+  function uid() {
+    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  }
+
+  function loadSavedCharts() {
+    try {
+      const raw = localStorage.getItem(SAVED_CHARTS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [];
+  }
+
+  function persistSavedCharts(charts) {
+    try {
+      localStorage.setItem(SAVED_CHARTS_KEY, JSON.stringify(charts));
+    } catch (_) {}
+  }
+
+  function loadGlobalProjects() {
+    try {
+      const raw = localStorage.getItem("datascope_projects");
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [];
+  }
+
+  function renderChartProjectSelect(selectedId) {
+    const sel = document.getElementById("chartProjectSelect");
+    sel.innerHTML = '<option value="">No project</option>';
+    loadGlobalProjects().forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (p.id === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  function saveChart() {
+    const name = document.getElementById("chartName").value.trim();
+    if (!name) {
+      document.getElementById("chartName").focus();
+      return;
+    }
+    const charts = loadSavedCharts();
+    const chartData = {
+      id: uid(),
+      name,
+      projectId: document.getElementById("chartProjectSelect").value || "",
+      headers: [...state.headers],
+      rows: state.rows.map((r) => [...r]),
+      colors: [...state.colors],
+      seriesIndices: [...state.seriesIndices],
+      xAxisIndex: Number(document.getElementById("xAxisSelect").value),
+      chartType: document.getElementById("chartTypeSelect").value,
+      stacked: document.getElementById("stackToggle").checked,
+      font: document.getElementById("fontFamilySelect").value,
+      fontSize: document.getElementById("fontSizeSelect").value,
+      savedAt: new Date().toISOString(),
+    };
+    charts.push(chartData);
+    persistSavedCharts(charts);
+    document.getElementById("chartName").value = "";
+    renderSavedChartsSelect();
+  }
+
+  function loadSavedChart(id) {
+    if (!id) return;
+    const charts = loadSavedCharts();
+    const chart = charts.find((c) => c.id === id);
+    if (!chart) return;
+
+    state.headers = [...chart.headers];
+    state.rows = chart.rows.map((r) => [...r]);
+    state.colors = [...(chart.colors || defaultPalette)];
+    state.seriesIndices = [...(chart.seriesIndices || [1])];
+
+    document.getElementById("chartTypeSelect").value = chart.chartType || "bar";
+    document.getElementById("stackToggle").checked = !!chart.stacked;
+    document.getElementById("fontFamilySelect").value = chart.font || 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+    document.getElementById("fontSizeSelect").value = chart.fontSize || "13";
+    document.getElementById("chartName").value = chart.name || "";
+
+    renderAxisSelects();
+
+    if (chart.xAxisIndex !== undefined) {
+      document.getElementById("xAxisSelect").value = String(chart.xAxisIndex);
+    }
+
+    renderTable();
+    renderColorSwatches();
+    applyFontDefaults();
+    renderExplorerChart();
+  }
+
+  function deleteSavedChart() {
+    const sel = document.getElementById("savedChartsSelect");
+    const id = sel.value;
+    if (!id) return;
+    const charts = loadSavedCharts();
+    const idx = charts.findIndex((c) => c.id === id);
+    if (idx === -1) return;
+    if (!confirm(`Delete saved chart "${charts[idx].name}"?`)) return;
+    charts.splice(idx, 1);
+    persistSavedCharts(charts);
+    renderSavedChartsSelect();
+  }
+
+  function renderSavedChartsSelect() {
+    const sel = document.getElementById("savedChartsSelect");
+    sel.innerHTML = '<option value="">Load saved chart\u2026</option>';
+    const charts = loadSavedCharts();
+    charts.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c.id;
+      opt.textContent = c.name;
+      sel.appendChild(opt);
+    });
+  }
+
   // ---------- Wire-up ----------
   function onFontChange() {
     applyFontDefaults();
@@ -942,6 +1065,13 @@
     document.getElementById("exportPngBtn").addEventListener("click", exportPng);
     document.getElementById("exportSvgBtn").addEventListener("click", exportSvg);
     document.getElementById("sendToSlidesBtn").addEventListener("click", sendToSlides);
+
+    // Saved charts
+    renderChartProjectSelect("");
+    renderSavedChartsSelect();
+    document.getElementById("saveChartBtn").addEventListener("click", saveChart);
+    document.getElementById("savedChartsSelect").addEventListener("change", (e) => loadSavedChart(e.target.value));
+    document.getElementById("deleteSavedChartBtn").addEventListener("click", deleteSavedChart);
 
     // Reset palette
     document.getElementById("resetColorsBtn").addEventListener("click", () => {

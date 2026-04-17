@@ -271,6 +271,50 @@ a {
   font-size: 16px;
 }
 
+.chart-save-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.chart-name-input {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  outline: none;
+  min-width: 160px;
+  flex: 1;
+}
+
+.chart-name-input:focus {
+  border-color: var(--accent);
+}
+
+.saved-charts-select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  outline: none;
+  cursor: pointer;
+  min-width: 180px;
+}
+
+.saved-charts-select:focus {
+  border-color: var(--accent);
+}
+
 .toolbar-controls {
   display: flex;
   gap: 10px;

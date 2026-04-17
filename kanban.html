@@ -19,6 +19,7 @@
         <a href="slides.html">Slides</a>
         <a href="kanban.html" class="active">Board</a>
         <a href="notes.html">Notes</a>
+        <a href="projects.html">Projects</a>
       </nav>
     </div>
   </header>
@@ -82,9 +83,17 @@
             <input type="date" id="cardReminder" />
           </div>
         </div>
-        <div class="field">
-          <label for="cardTags">Tags <span class="field-hint">(comma-separated)</span></label>
-          <input type="text" id="cardTags" placeholder="work, urgent, design" autocomplete="off" />
+        <div class="field-row">
+          <div class="field">
+            <label for="cardTags">Tags <span class="field-hint">(comma-separated)</span></label>
+            <input type="text" id="cardTags" placeholder="work, urgent, design" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label for="cardProject">Project</label>
+            <select id="cardProject">
+              <option value="">None</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="modal-footer">

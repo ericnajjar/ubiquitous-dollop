@@ -2,6 +2,7 @@
 (() => {
   const STORE_KEY = "datascope_slides";
   const CHART_IMPORT_KEY = "datascope_chart_to_slides";
+  const GLOBAL_PROJECTS_KEY = "datascope_projects";
 
   // ---------- Templates ----------
   const TEMPLATES = {
@@ -374,6 +375,7 @@
     renderSlideList();
     renderSlidePreview();
     renderControls();
+    renderDeckProjectSelect();
   }
 
   // ---------- Project operations ----------
@@ -742,6 +744,35 @@ render();
     }
   }
 
+  // ---------- Deck-level project linking ----------
+  function loadGlobalProjects() {
+    try {
+      const raw = localStorage.getItem(GLOBAL_PROJECTS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [];
+  }
+
+  function renderDeckProjectSelect() {
+    const sel = document.getElementById("deckProjectSelect");
+    sel.innerHTML = '<option value="">None</option>';
+    const proj = currentProject();
+    loadGlobalProjects().forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (proj && proj.projectId === p.id) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  function onDeckProjectChange(value) {
+    const proj = currentProject();
+    if (!proj) return;
+    proj.projectId = value || "";
+    saveState();
+  }
+
   // ---------- Keyboard nav ----------
   function onKeyDown(e) {
     if (e.target.closest("[contenteditable]")) return;
@@ -763,6 +794,7 @@ render();
     document.getElementById("newProjectBtn").addEventListener("click", newProject);
     document.getElementById("deleteProjectBtn").addEventListener("click", deleteProject);
     document.getElementById("projectSelect").addEventListener("dblclick", renameProject);
+    document.getElementById("deckProjectSelect").addEventListener("change", (e) => onDeckProjectChange(e.target.value));
 
     // Navigation
     document.getElementById("prevSlideBtn").addEventListener("click", prevSlide);
