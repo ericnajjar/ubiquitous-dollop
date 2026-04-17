@@ -198,6 +198,14 @@
       footer.appendChild(tagsEl);
     }
 
+    const cd = formatCountdown(note.dueDate);
+    if (cd) {
+      const badge = document.createElement("span");
+      badge.className = "countdown " + cd.cls;
+      badge.textContent = cd.text;
+      footer.appendChild(badge);
+    }
+
     const date = document.createElement("span");
     date.className = "note-date";
     date.textContent = formatDate(note.updatedAt);
@@ -220,6 +228,19 @@
     return d.toLocaleDateString();
   }
 
+  function formatCountdown(dateStr) {
+    if (!dateStr) return null;
+    const due = new Date(dateStr + "T23:59:59");
+    const now = new Date();
+    const diffMs = due - now;
+    const days = Math.ceil(diffMs / 86400000);
+    if (days < 0) return { text: `Overdue ${Math.abs(days)}d`, cls: "overdue" };
+    if (days === 0) return { text: "Due today", cls: "urgent" };
+    if (days === 1) return { text: "Tomorrow", cls: "soon" };
+    if (days <= 3) return { text: `${days} days`, cls: "soon" };
+    return { text: `${days} days`, cls: "ok" };
+  }
+
   // ---------- Modal ----------
   function openModal(note) {
     state.editingId = note ? note.id : null;
@@ -228,6 +249,7 @@
     document.getElementById("noteTitleInput").value = note?.title || "";
     document.getElementById("noteBodyInput").value = note?.body || "";
     document.getElementById("noteTagsInput").value = note?.tags?.join(", ") || "";
+    document.getElementById("noteDueInput").value = note?.dueDate || "";
     renderColorPalette();
 
     document.getElementById("modalOverlay").hidden = false;
@@ -249,6 +271,7 @@
     const body = document.getElementById("noteBodyInput").value.trim();
     const tags = document.getElementById("noteTagsInput").value
       .split(",").map((t) => t.trim()).filter(Boolean);
+    const dueDate = document.getElementById("noteDueInput").value || "";
 
     if (!title && !body) { closeModal(); return; }
 
@@ -260,6 +283,7 @@
         note.title = title;
         note.body = body;
         note.tags = tags;
+        note.dueDate = dueDate;
         note.colorIdx = state.editingColorIdx;
         note.updatedAt = now;
       }
@@ -269,6 +293,7 @@
         title,
         body,
         tags,
+        dueDate,
         colorIdx: state.editingColorIdx,
         pinned: false,
         createdAt: now,

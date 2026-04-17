@@ -1,5 +1,8 @@
-// DataScope Slides — template-based slide deck builder.
+// DataScope Slides — template-based slide deck builder with projects & image support.
 (() => {
+  const STORE_KEY = "datascope_slides";
+  const CHART_IMPORT_KEY = "datascope_chart_to_slides";
+
   // ---------- Templates ----------
   const TEMPLATES = {
     title: {
@@ -43,8 +46,25 @@
       name: "Blank",
       fields: { content: "Click to edit" },
     },
+    "title-image": {
+      name: "Title + Image",
+      fields: { title: "Slide Title", image: "" },
+    },
+    "full-image": {
+      name: "Full Image",
+      fields: { image: "" },
+    },
+    "image-caption": {
+      name: "Image + Caption",
+      fields: { image: "", caption: "Add a caption here" },
+    },
   };
 
+  function uid() {
+    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  }
+
+  // ---------- Render slide HTML ----------
   function renderSlideHTML(template, content, style) {
     const tpl = TEMPLATES[template];
     if (!tpl) return "";
@@ -57,6 +77,13 @@
         .replace(/\n/g, "<br>");
 
     const ce = 'contenteditable="true" spellcheck="false"';
+
+    function imageZone(fieldName, imgData) {
+      if (imgData) {
+        return `<div class="image-drop-zone" data-field="${fieldName}"><img src="${imgData}" alt="Slide image" /></div>`;
+      }
+      return `<div class="image-drop-zone" data-field="${fieldName}"><span class="placeholder">Drop an image here or click to browse</span></div>`;
+    }
 
     switch (template) {
       case "title":
@@ -102,27 +129,109 @@
           <div class="field-content" ${ce} data-field="content">${esc(content.content)}</div>
         </div>`;
 
+      case "title-image":
+        return `<div class="slide-content layout-title-image">
+          <div class="field-title" ${ce} data-field="title">${esc(content.title)}</div>
+          ${imageZone("image", content.image)}
+        </div>`;
+
+      case "full-image":
+        return `<div class="slide-content layout-full-image">
+          ${imageZone("image", content.image)}
+        </div>`;
+
+      case "image-caption":
+        return `<div class="slide-content layout-image-caption">
+          ${imageZone("image", content.image)}
+          <div class="field-caption" ${ce} data-field="caption">${esc(content.caption)}</div>
+        </div>`;
+
       default:
         return "";
     }
   }
 
+  // ---------- Persistence ----------
+  function loadProjects() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.projects) && data.projects.length) return data;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function migrateOldFormat() {
+    try {
+      const oldKey = "datascope_slides_old_check";
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (data.projects) return null;
+      if (Array.isArray(data.slides)) {
+        return {
+          projects: [{ id: uid(), name: "My Deck", slides: data.slides }],
+          currentProject: 0,
+          currentSlide: data.current || 0,
+        };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(
+        STORE_KEY,
+        JSON.stringify({
+          projects: state.projects,
+          currentProject: state.currentProject,
+          currentSlide: state.currentSlide,
+        })
+      );
+    } catch (_) {}
+  }
+
   // ---------- State ----------
-  const state = {
-    slides: [
-      {
-        template: "title",
-        content: { title: "My Presentation", subtitle: "Created with DataScope Slides" },
-        font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-        textColor: "#ffffff",
-        bgColor: "#1a1a2e",
-      },
-    ],
-    current: 0,
-  };
+  function defaultState() {
+    return {
+      projects: [
+        {
+          id: uid(),
+          name: "My Deck",
+          slides: [
+            {
+              template: "title",
+              content: { title: "My Presentation", subtitle: "Created with DataScope Slides" },
+              font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+              textColor: "#ffffff",
+              bgColor: "#1a1a2e",
+            },
+          ],
+        },
+      ],
+      currentProject: 0,
+      currentSlide: 0,
+    };
+  }
+
+  const migrated = migrateOldFormat();
+  const loaded = loadProjects();
+  const state = migrated || loaded || defaultState();
+  if (migrated) saveState();
+
+  function currentProject() {
+    return state.projects[state.currentProject] || state.projects[0];
+  }
+
+  function currentSlides() {
+    return currentProject().slides;
+  }
 
   function currentSlide() {
-    return state.slides[state.current];
+    return currentSlides()[state.currentSlide];
   }
 
   function makeSlide(template = "title") {
@@ -143,7 +252,7 @@
     const preview = document.getElementById("slidePreview");
     preview.querySelectorAll("[data-field]").forEach((el) => {
       const field = el.getAttribute("data-field");
-      // Convert <br> back to newlines, strip other HTML.
+      if (el.classList.contains("image-drop-zone")) return;
       const html = el.innerHTML;
       const text = html
         .replace(/<br\s*\/?>/gi, "\n")
@@ -154,6 +263,56 @@
         .replace(/&nbsp;/g, " ");
       slide.content[field] = text;
     });
+    saveState();
+  }
+
+  // ---------- Image drop handling ----------
+  function setupImageDropZones() {
+    const preview = document.getElementById("slidePreview");
+    const zones = preview.querySelectorAll(".image-drop-zone");
+    zones.forEach((zone) => {
+      const fieldName = zone.getAttribute("data-field");
+
+      zone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        zone.classList.add("dragover");
+      });
+
+      zone.addEventListener("dragleave", () => {
+        zone.classList.remove("dragover");
+      });
+
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zone.classList.remove("dragover");
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.match(/^image\/(jpeg|png|jpg)$/)) {
+          readImageFile(file, fieldName);
+        }
+      });
+
+      zone.addEventListener("click", () => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/jpeg,image/png";
+        input.addEventListener("change", () => {
+          if (input.files[0]) readImageFile(input.files[0], fieldName);
+        });
+        input.click();
+      });
+    });
+  }
+
+  function readImageFile(file, fieldName) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const slide = currentSlide();
+      if (!slide) return;
+      slide.content[fieldName] = e.target.result;
+      saveState();
+      renderSlidePreview();
+    };
+    reader.readAsDataURL(file);
   }
 
   // ---------- Render ----------
@@ -166,18 +325,19 @@
     preview.style.background = slide.bgColor;
     preview.innerHTML = renderSlideHTML(slide.template, slide.content);
 
-    // Attach blur listeners to save edits.
-    preview.querySelectorAll("[data-field]").forEach((el) => {
+    preview.querySelectorAll("[data-field]:not(.image-drop-zone)").forEach((el) => {
       el.addEventListener("blur", saveFieldsFromDOM);
     });
+
+    setupImageDropZones();
   }
 
   function renderSlideList() {
     const list = document.getElementById("slideList");
     list.innerHTML = "";
-    state.slides.forEach((slide, i) => {
+    currentSlides().forEach((slide, i) => {
       const li = document.createElement("li");
-      if (i === state.current) li.classList.add("active");
+      if (i === state.currentSlide) li.classList.add("active");
       li.innerHTML = `<span class="slide-num">${i + 1}</span> ${TEMPLATES[slide.template]?.name || slide.template}`;
       li.addEventListener("click", () => goToSlide(i));
       list.appendChild(li);
@@ -194,43 +354,105 @@
     document.getElementById("textColorHex").textContent = slide.textColor;
     document.getElementById("bgColorInput").value = slide.bgColor;
     document.getElementById("bgColorHex").textContent = slide.bgColor;
-    document.getElementById("slideCounter").textContent = `${state.current + 1} / ${state.slides.length}`;
+    document.getElementById("slideCounter").textContent = `${state.currentSlide + 1} / ${currentSlides().length}`;
+  }
+
+  function renderProjectSelect() {
+    const sel = document.getElementById("projectSelect");
+    sel.innerHTML = "";
+    state.projects.forEach((proj, i) => {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = proj.name;
+      if (i === state.currentProject) opt.selected = true;
+      sel.appendChild(opt);
+    });
   }
 
   function renderAll() {
+    renderProjectSelect();
     renderSlideList();
     renderSlidePreview();
     renderControls();
   }
 
-  // ---------- Navigation ----------
-  function goToSlide(index) {
+  // ---------- Project operations ----------
+  function switchProject(index) {
     saveFieldsFromDOM();
-    state.current = Math.max(0, Math.min(index, state.slides.length - 1));
+    state.currentProject = index;
+    state.currentSlide = 0;
+    saveState();
     renderAll();
   }
 
+  function newProject() {
+    saveFieldsFromDOM();
+    const name = prompt("Project name:", "New Deck");
+    if (!name) return;
+    state.projects.push({
+      id: uid(),
+      name,
+      slides: [makeSlide("title")],
+    });
+    state.currentProject = state.projects.length - 1;
+    state.currentSlide = 0;
+    saveState();
+    renderAll();
+  }
+
+  function deleteProject() {
+    if (state.projects.length <= 1) {
+      alert("You need at least one project.");
+      return;
+    }
+    if (!confirm(`Delete project "${currentProject().name}"?`)) return;
+    state.projects.splice(state.currentProject, 1);
+    state.currentProject = Math.min(state.currentProject, state.projects.length - 1);
+    state.currentSlide = 0;
+    saveState();
+    renderAll();
+  }
+
+  function renameProject() {
+    const proj = currentProject();
+    const name = prompt("Rename project:", proj.name);
+    if (!name) return;
+    proj.name = name;
+    saveState();
+    renderProjectSelect();
+  }
+
+  // ---------- Navigation ----------
+  function goToSlide(index) {
+    saveFieldsFromDOM();
+    state.currentSlide = Math.max(0, Math.min(index, currentSlides().length - 1));
+    saveState();
+    renderSlideList();
+    renderSlidePreview();
+    renderControls();
+  }
+
   function prevSlide() {
-    if (state.current > 0) goToSlide(state.current - 1);
+    if (state.currentSlide > 0) goToSlide(state.currentSlide - 1);
   }
 
   function nextSlide() {
-    if (state.current < state.slides.length - 1) goToSlide(state.current + 1);
+    if (state.currentSlide < currentSlides().length - 1) goToSlide(state.currentSlide + 1);
   }
 
   // ---------- Slide operations ----------
   function addSlide() {
     saveFieldsFromDOM();
     const newSlide = makeSlide("title-body");
-    // Inherit font/colors from the current slide.
     const cur = currentSlide();
     if (cur) {
       newSlide.font = cur.font;
       newSlide.textColor = cur.textColor;
       newSlide.bgColor = cur.bgColor;
     }
-    state.slides.splice(state.current + 1, 0, newSlide);
-    state.current += 1;
+    currentSlides().splice(state.currentSlide + 1, 0, newSlide);
+    state.currentSlide += 1;
+    saveState();
     renderAll();
   }
 
@@ -239,15 +461,17 @@
     const cur = currentSlide();
     if (!cur) return;
     const clone = JSON.parse(JSON.stringify(cur));
-    state.slides.splice(state.current + 1, 0, clone);
-    state.current += 1;
+    currentSlides().splice(state.currentSlide + 1, 0, clone);
+    state.currentSlide += 1;
+    saveState();
     renderAll();
   }
 
   function deleteSlide() {
-    if (state.slides.length <= 1) return;
-    state.slides.splice(state.current, 1);
-    if (state.current >= state.slides.length) state.current = state.slides.length - 1;
+    if (currentSlides().length <= 1) return;
+    currentSlides().splice(state.currentSlide, 1);
+    if (state.currentSlide >= currentSlides().length) state.currentSlide = currentSlides().length - 1;
+    saveState();
     renderAll();
   }
 
@@ -259,11 +483,9 @@
     const oldContent = slide.content;
     const newFields = { ...TEMPLATES[newTemplate].fields };
 
-    // Carry over any matching field names.
     for (const key of Object.keys(newFields)) {
       if (oldContent[key] !== undefined) newFields[key] = oldContent[key];
     }
-    // Also try to map title↔heading.
     if (newFields.heading !== undefined && oldContent.title !== undefined && oldContent.heading === undefined) {
       newFields.heading = oldContent.title;
     }
@@ -273,6 +495,7 @@
 
     slide.template = newTemplate;
     slide.content = newFields;
+    saveState();
     renderSlidePreview();
   }
 
@@ -282,6 +505,7 @@
     if (!slide) return;
     saveFieldsFromDOM();
     slide.font = font;
+    saveState();
     renderSlidePreview();
   }
 
@@ -291,6 +515,7 @@
     slide.textColor = color;
     document.getElementById("slidePreview").style.color = color;
     document.getElementById("textColorHex").textContent = color;
+    saveState();
   }
 
   function onBgColorChange(color) {
@@ -299,6 +524,34 @@
     slide.bgColor = color;
     document.getElementById("slidePreview").style.background = color;
     document.getElementById("bgColorHex").textContent = color;
+    saveState();
+  }
+
+  // ---------- Chart import ----------
+  function checkChartImport() {
+    try {
+      const raw = localStorage.getItem(CHART_IMPORT_KEY);
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      localStorage.removeItem(CHART_IMPORT_KEY);
+      if (!data.image) return;
+
+      const slide = makeSlide("title-image");
+      slide.content.title = data.title || "Chart";
+      slide.content.image = data.image;
+
+      const cur = currentSlide();
+      if (cur) {
+        slide.font = cur.font;
+        slide.textColor = cur.textColor;
+        slide.bgColor = cur.bgColor;
+      }
+
+      currentSlides().push(slide);
+      state.currentSlide = currentSlides().length - 1;
+      saveState();
+      renderAll();
+    } catch (_) {}
   }
 
   // ---------- Export ----------
@@ -315,7 +568,7 @@
       useCORS: true,
     }).then((canvas) => {
       const url = canvas.toDataURL("image/png");
-      triggerDownload(url, `slide-${state.current + 1}.png`);
+      triggerDownload(url, `slide-${state.currentSlide + 1}.png`);
     });
   }
 
@@ -325,20 +578,20 @@
       alert("html2canvas is still loading — try again in a moment.");
       return;
     }
-    const original = state.current;
+    const original = state.currentSlide;
     let i = 0;
 
     function next() {
-      if (i >= state.slides.length) {
+      if (i >= currentSlides().length) {
         goToSlide(original);
         return;
       }
-      state.current = i;
+      state.currentSlide = i;
       renderSlidePreview();
       renderControls();
       const el = document.getElementById("slideFrame");
       html2canvas(el, {
-        backgroundColor: state.slides[i]?.bgColor || "#1a1a2e",
+        backgroundColor: currentSlides()[i]?.bgColor || "#1a1a2e",
         scale: 2,
         useCORS: true,
       }).then((canvas) => {
@@ -354,14 +607,15 @@
 
   function exportHtml() {
     saveFieldsFromDOM();
-    const slidesData = JSON.stringify(state.slides);
+    const slides = currentSlides();
+    const slidesData = JSON.stringify(slides);
     const templatesSource = `const TEMPLATES=${JSON.stringify(TEMPLATES)};`;
 
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Slide Deck</title>
+<title>${currentProject().name}</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden;font-family:system-ui,sans-serif}
@@ -388,6 +642,14 @@ html,body{height:100%;overflow:hidden;font-family:system-ui,sans-serif}
 .layout-quote .field-attribution{font-size:clamp(12px,1.4vw,18px);opacity:.6}
 .layout-blank{flex-direction:column;justify-content:center;align-items:center;text-align:center}
 .layout-blank .field-content{font-size:clamp(16px,2vw,24px);line-height:1.5}
+.layout-title-image{flex-direction:column;gap:20px}
+.layout-title-image .field-title{font-size:clamp(22px,3vw,38px);font-weight:700;line-height:1.2}
+.layout-full-image{flex-direction:column;justify-content:center;align-items:center;padding:0}
+.layout-image-caption{flex-direction:column;gap:12px}
+.layout-image-caption .field-caption{font-size:clamp(13px,1.6vw,18px);opacity:.8;text-align:center}
+.image-drop-zone{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:60%}
+.image-drop-zone img{max-width:100%;max-height:100%;object-fit:contain}
+.layout-full-image .image-drop-zone{width:100%;height:100%;min-height:auto}
 .nav{position:fixed;bottom:20px;right:20px;display:flex;gap:8px;z-index:10}
 .nav button{padding:8px 16px;border:none;border-radius:8px;background:rgba(0,0,0,.5);color:#fff;cursor:pointer;font-size:14px;backdrop-filter:blur(4px)}
 .nav button:hover{background:rgba(0,0,0,.7)}
@@ -396,13 +658,14 @@ html,body{height:100%;overflow:hidden;font-family:system-ui,sans-serif}
 </head>
 <body>
 <div id="deck"></div>
-<div class="nav"><button onclick="go(-1)">← Prev</button><button onclick="go(1)">Next →</button></div>
+<div class="nav"><button onclick="go(-1)">\u2190 Prev</button><button onclick="go(1)">Next \u2192</button></div>
 <div class="counter" id="counter"></div>
 <script>
 ${templatesSource}
 const slides=${slidesData};
 let cur=0;
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>')}
+function imgZone(d){return d?'<div class="image-drop-zone"><img src="'+d+'" alt=""/></div>':'<div class="image-drop-zone"></div>'}
 function renderSlide(s){
   const t=s.template,c=s.content;
   switch(t){
@@ -413,6 +676,9 @@ function renderSlide(s){
     case'section':return '<div class="slide-content layout-section"><div class="field-heading">'+esc(c.heading)+'</div></div>';
     case'quote':return '<div class="slide-content layout-quote"><div class="field-quote">'+esc(c.quote)+'</div><div class="field-attribution">'+esc(c.attribution)+'</div></div>';
     case'blank':return '<div class="slide-content layout-blank"><div class="field-content">'+esc(c.content)+'</div></div>';
+    case'title-image':return '<div class="slide-content layout-title-image"><div class="field-title">'+esc(c.title)+'</div>'+imgZone(c.image)+'</div>';
+    case'full-image':return '<div class="slide-content layout-full-image">'+imgZone(c.image)+'</div>';
+    case'image-caption':return '<div class="slide-content layout-image-caption">'+imgZone(c.image)+'<div class="field-caption">'+esc(c.caption)+'</div></div>';
     default:return '';
   }
 }
@@ -432,7 +698,7 @@ render();
 
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    triggerDownload(url, "slide-deck.html");
+    triggerDownload(url, `${currentProject().name.replace(/[^a-z0-9]+/gi, "-")}.html`);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
@@ -444,7 +710,7 @@ render();
       container.id = "printContainer";
       document.body.appendChild(container);
     }
-    container.innerHTML = state.slides
+    container.innerHTML = currentSlides()
       .map((slide) => {
         const html = renderSlideHTML(slide.template, slide.content)
           .replace(/contenteditable="true"/g, "")
@@ -478,7 +744,6 @@ render();
 
   // ---------- Keyboard nav ----------
   function onKeyDown(e) {
-    // Don't intercept when editing text.
     if (e.target.closest("[contenteditable]")) return;
     if (e.key === "ArrowLeft") prevSlide();
     if (e.key === "ArrowRight") nextSlide();
@@ -488,7 +753,16 @@ render();
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
     populateTemplateSelect();
+
+    checkChartImport();
+
     renderAll();
+
+    // Project controls
+    document.getElementById("projectSelect").addEventListener("change", (e) => switchProject(Number(e.target.value)));
+    document.getElementById("newProjectBtn").addEventListener("click", newProject);
+    document.getElementById("deleteProjectBtn").addEventListener("click", deleteProject);
+    document.getElementById("projectSelect").addEventListener("dblclick", renameProject);
 
     // Navigation
     document.getElementById("prevSlideBtn").addEventListener("click", prevSlide);

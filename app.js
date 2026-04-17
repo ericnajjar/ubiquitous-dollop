@@ -867,6 +867,15 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function sendToSlides() {
+    const canvas = chartToFlatCanvas();
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL("image/png");
+    const title = document.getElementById("explorerTitle").textContent || "Chart";
+    localStorage.setItem("datascope_chart_to_slides", JSON.stringify({ image: dataUrl, title }));
+    window.location.href = "slides.html";
+  }
+
   // ---------- Wire-up ----------
   function onFontChange() {
     applyFontDefaults();
@@ -932,6 +941,7 @@
     // Export
     document.getElementById("exportPngBtn").addEventListener("click", exportPng);
     document.getElementById("exportSvgBtn").addEventListener("click", exportSvg);
+    document.getElementById("sendToSlidesBtn").addEventListener("click", sendToSlides);
 
     // Reset palette
     document.getElementById("resetColorsBtn").addEventListener("click", () => {
