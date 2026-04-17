@@ -36,32 +36,18 @@
   const state = load() || defaultState();
 
   // ---------- Countdown helpers ----------
-  function formatCountdown(isoDate) {
-    if (!isoDate) return null;
-    const diff = new Date(isoDate) - Date.now();
-    const abs = Math.abs(diff);
-    const days = Math.floor(abs / 86400000);
-    const hours = Math.floor((abs % 86400000) / 3600000);
-    const mins = Math.floor((abs % 3600000) / 60000);
+  function formatCountdown(dateStr) {
+    if (!dateStr) return null;
+    const due = new Date(dateStr + "T23:59:59");
+    const now = new Date();
+    const diffMs = due - now;
+    const days = Math.ceil(diffMs / 86400000);
 
-    let text, cls;
-    if (diff < 0) {
-      text = days > 0 ? `Overdue ${days}d` : hours > 0 ? `Overdue ${hours}h` : `Overdue ${mins}m`;
-      cls = "overdue";
-    } else if (diff < 3600000) {
-      text = `${mins}m left`;
-      cls = "urgent";
-    } else if (diff < 86400000) {
-      text = `${hours}h left`;
-      cls = "urgent";
-    } else if (diff < 3 * 86400000) {
-      text = `${days}d ${hours}h`;
-      cls = "soon";
-    } else {
-      text = `${days}d left`;
-      cls = "ok";
-    }
-    return { text, cls };
+    if (days < 0) return { text: `Overdue ${Math.abs(days)}d`, cls: "overdue" };
+    if (days === 0) return { text: "Due today", cls: "urgent" };
+    if (days === 1) return { text: "Tomorrow", cls: "soon" };
+    if (days <= 3) return { text: `${days} days`, cls: "soon" };
+    return { text: `${days} days`, cls: "ok" };
   }
 
   // ---------- Notifications ----------
@@ -84,19 +70,15 @@
 
   function checkReminders() {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
-    const now = Date.now();
+    const today = new Date().toISOString().slice(0, 10);
     state.columns.forEach((col) => {
       col.cards.forEach((card) => {
         if (!card.reminder) return;
-        const t = new Date(card.reminder).getTime();
-        if (t <= now && !firedReminders.has(card.id + "@" + card.reminder)) {
+        if (card.reminder <= today && !firedReminders.has(card.id + "@" + card.reminder)) {
           firedReminders.add(card.id + "@" + card.reminder);
           saveFired();
           new Notification(`Reminder: ${card.title}`, {
-            body: card.description || card.dueDate
-              ? `Due: ${new Date(card.dueDate).toLocaleString()}`
-              : "",
-            icon: "",
+            body: card.dueDate ? `Due: ${card.dueDate}` : "",
           });
         }
       });
@@ -390,8 +372,8 @@
     document.getElementById("cardTitle").value = card?.title || "";
     document.getElementById("cardDesc").value = card?.description || "";
     document.getElementById("cardPriority").value = card?.priority || "medium";
-    document.getElementById("cardDue").value = card?.dueDate ? toLocalDateTimeInput(card.dueDate) : "";
-    document.getElementById("cardReminder").value = card?.reminder ? toLocalDateTimeInput(card.reminder) : "";
+    document.getElementById("cardDue").value = card?.dueDate ? toDateInput(card.dueDate) : "";
+    document.getElementById("cardReminder").value = card?.reminder ? toDateInput(card.reminder) : "";
     document.getElementById("cardTags").value = card?.tags?.join(", ") || "";
     document.getElementById("deleteCardBtn").hidden = !card;
 
@@ -430,8 +412,8 @@
       title,
       description: document.getElementById("cardDesc").value.trim(),
       priority: document.getElementById("cardPriority").value,
-      dueDate: dueRaw ? new Date(dueRaw).toISOString() : "",
-      reminder: reminderRaw ? new Date(reminderRaw).toISOString() : "",
+      dueDate: dueRaw || "",
+      reminder: reminderRaw || "",
       tags,
     };
 
@@ -498,10 +480,9 @@
   }
 
   // ---------- Date helpers ----------
-  function toLocalDateTimeInput(iso) {
-    const d = new Date(iso);
-    const pad = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  function toDateInput(dateStr) {
+    if (!dateStr) return "";
+    return dateStr.slice(0, 10);
   }
 
   // ---------- Init ----------
