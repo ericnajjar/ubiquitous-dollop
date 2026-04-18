@@ -43,6 +43,7 @@
           <button type="button" class="view-toggle-btn" data-view="gantt">Gantt</button>
         </div>
         <button type="button" class="btn btn-ghost btn-sm" id="addColumnBtn">+ Add column</button>
+        <button type="button" class="btn btn-primary btn-sm" id="planProjectBtn">Plan project</button>
         <button type="button" class="btn btn-ghost btn-sm" id="notifBtn" id="notifBtn" title="Enable reminders">🔔 Reminders</button>
       </div>
     </div>
@@ -113,6 +114,47 @@
         <span class="spacer"></span>
         <button type="button" class="btn btn-ghost btn-sm" id="modalCancel">Cancel</button>
         <button type="button" class="btn btn-primary btn-sm" id="modalSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plan project modal -->
+  <div class="modal-overlay" id="planOverlay" hidden>
+    <div class="modal plan-modal" role="dialog" aria-modal="true" aria-labelledby="planModalTitle">
+      <div class="modal-header">
+        <h2 id="planModalTitle">Plan my project</h2>
+        <button type="button" class="modal-close" id="planModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="apiKeyInput">Claude API key</label>
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-..." autocomplete="off" />
+          <span class="field-hint plan-key-hint">Stored locally. Only sent to Anthropic.</span>
+        </div>
+        <div class="field">
+          <label>Upload a document</label>
+          <div class="plan-upload-row">
+            <label class="btn btn-ghost btn-sm plan-file-btn">
+              Choose file
+              <input type="file" id="planFileInput" accept=".txt,.md,.csv,.rtf" />
+            </label>
+            <span class="plan-file-name" id="planFileName">No file chosen</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="planDocText">Or paste content</label>
+          <textarea id="planDocText" rows="8" placeholder="Paste your project brief, requirements doc, meeting notes, or any text describing work to be done…"></textarea>
+        </div>
+        <div class="field">
+          <label for="planTargetCol">Add cards to</label>
+          <select id="planTargetCol"></select>
+        </div>
+        <div class="plan-status" id="planStatus" hidden></div>
+      </div>
+      <div class="modal-footer">
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="planCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="planGenerateBtn">Generate cards</button>
       </div>
     </div>
   </div>

@@ -2,6 +2,7 @@
 (() => {
   // ---------- Storage ----------
   const STORE_KEY = "datascope_kanban";
+  const API_KEY_STORE = "datascope_anthropic_key";
 
   function load() {
     try {
@@ -692,6 +693,144 @@
     return dateStr.slice(0, 10);
   }
 
+  // ---------- Plan project ----------
+  function openPlanModal() {
+    document.getElementById("apiKeyInput").value = localStorage.getItem(API_KEY_STORE) || "";
+    document.getElementById("planDocText").value = "";
+    document.getElementById("planFileName").textContent = "No file chosen";
+    document.getElementById("planFileInput").value = "";
+    document.getElementById("planGenerateBtn").disabled = false;
+    document.getElementById("planGenerateBtn").textContent = "Generate cards";
+
+    const colSel = document.getElementById("planTargetCol");
+    colSel.innerHTML = "";
+    state.columns.forEach((col) => {
+      const opt = document.createElement("option");
+      opt.value = col.id;
+      opt.textContent = col.title;
+      colSel.appendChild(opt);
+    });
+
+    const status = document.getElementById("planStatus");
+    status.hidden = true;
+    status.className = "plan-status";
+
+    document.getElementById("planOverlay").hidden = false;
+    document.getElementById("planDocText").focus();
+  }
+
+  function closePlanModal() {
+    document.getElementById("planOverlay").hidden = true;
+  }
+
+  function setPlanStatus(type, message) {
+    const el = document.getElementById("planStatus");
+    el.hidden = false;
+    el.className = `plan-status ${type}`;
+    if (type === "loading") {
+      el.innerHTML = `<span class="plan-spinner"></span>${message}`;
+    } else {
+      el.textContent = message;
+    }
+  }
+
+  async function handlePlanGenerate() {
+    const apiKey = document.getElementById("apiKeyInput").value.trim();
+    if (!apiKey) { setPlanStatus("error", "Please enter your Claude API key."); return; }
+
+    const docText = document.getElementById("planDocText").value.trim();
+    if (!docText) { setPlanStatus("error", "Please paste or upload a document."); return; }
+
+    localStorage.setItem(API_KEY_STORE, apiKey);
+
+    const targetColId = document.getElementById("planTargetCol").value;
+    const targetCol = state.columns.find((c) => c.id === targetColId);
+    if (!targetCol) return;
+
+    const genBtn = document.getElementById("planGenerateBtn");
+    genBtn.disabled = true;
+    genBtn.textContent = "Generating…";
+    setPlanStatus("loading", "Analyzing document and extracting tasks…");
+
+    try {
+      const tasks = await callClaudeAPI(apiKey, docText);
+
+      tasks.forEach((task) => {
+        targetCol.cards.push({
+          id: uid(),
+          title: String(task.title || "Untitled").slice(0, 120),
+          description: String(task.description || ""),
+          priority: ["high", "medium", "low"].includes(task.priority) ? task.priority : "medium",
+          startDate: "",
+          dueDate: "",
+          reminder: "",
+          tags: Array.isArray(task.tags) ? task.tags.map((t) => String(t).slice(0, 30)) : [],
+          projectId: "",
+          createdAt: new Date().toISOString(),
+        });
+      });
+
+      save();
+      renderAll();
+      setPlanStatus("success", `Created ${tasks.length} card${tasks.length !== 1 ? "s" : ""} in "${targetCol.title}".`);
+      setTimeout(closePlanModal, 1500);
+    } catch (err) {
+      setPlanStatus("error", err.message);
+      genBtn.disabled = false;
+      genBtn.textContent = "Generate cards";
+    }
+  }
+
+  async function callClaudeAPI(apiKey, documentText) {
+    const systemPrompt = `You are a project planning assistant. You extract actionable tasks from documents and return them as structured JSON.
+
+Return ONLY a JSON array of task objects. Each object must have:
+- "title": string — concise task title, under 60 characters
+- "description": string — brief description, 1-2 sentences
+- "priority": "high" | "medium" | "low" — based on urgency and importance
+- "tags": string[] — 1-3 relevant keyword tags
+
+Guidelines:
+- Extract specific, actionable work items
+- Break large tasks into smaller concrete steps
+- Order by logical work sequence
+- Infer priority from context (deadlines, urgency language, dependencies)
+- Return ONLY valid JSON, no markdown fences or commentary`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: `Extract tasks from this document:\n\n${documentText}` }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const msg = err.error?.message || `API request failed (${response.status})`;
+      throw new Error(msg);
+    }
+
+    const data = await response.json();
+    const text = data.content[0].text;
+
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error("Could not parse tasks from the API response.");
+
+    const tasks = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(tasks) || !tasks.length) throw new Error("No tasks were extracted from the document.");
+
+    return tasks;
+  }
+
   // ---------- Init ----------
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
@@ -736,7 +875,29 @@
       if (e.target === document.getElementById("modalOverlay")) closeModal();
     });
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeModal();
+      if (e.key === "Escape") {
+        closeModal();
+        closePlanModal();
+      }
+    });
+
+    // Plan project
+    document.getElementById("planProjectBtn").addEventListener("click", openPlanModal);
+    document.getElementById("planModalClose").addEventListener("click", closePlanModal);
+    document.getElementById("planCancelBtn").addEventListener("click", closePlanModal);
+    document.getElementById("planGenerateBtn").addEventListener("click", handlePlanGenerate);
+    document.getElementById("planOverlay").addEventListener("click", (e) => {
+      if (e.target === document.getElementById("planOverlay")) closePlanModal();
+    });
+    document.getElementById("planFileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById("planFileName").textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        document.getElementById("planDocText").value = ev.target.result;
+      };
+      reader.readAsText(file);
     });
 
     // Filters

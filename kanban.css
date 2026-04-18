@@ -263,7 +263,7 @@ a { color: inherit; text-decoration: none; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .field-row-3 { grid-template-columns: 1fr 1fr 1fr; }
 
-input[type="text"], input[type="date"], input[type="datetime-local"], select, textarea {
+input[type="text"], input[type="password"], input[type="date"], input[type="datetime-local"], select, textarea {
   font: inherit; color: var(--text);
   background: var(--surface-2); border: 1px solid var(--border);
   border-radius: 8px; padding: 9px 12px; outline: none; width: 100%;
@@ -380,6 +380,52 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert
 .gantt-milestone.priority-medium { background: var(--warning); }
 .gantt-milestone.priority-low    { background: var(--success); }
 .gantt-milestone:hover { filter: brightness(1.4); }
+
+/* Plan modal */
+.plan-modal { max-width: 560px; }
+
+.plan-upload-row {
+  display: flex; align-items: center; gap: 12px;
+}
+
+.plan-file-btn {
+  cursor: pointer; flex-shrink: 0;
+}
+.plan-file-btn input[type="file"] {
+  position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;
+}
+
+.plan-file-name {
+  font-size: 13px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+
+.plan-key-hint {
+  font-size: 11px; color: var(--muted); margin-top: 2px;
+}
+
+.plan-status {
+  padding: 12px 14px; border-radius: 10px;
+  font-size: 13px; line-height: 1.5;
+}
+.plan-status.loading {
+  background: rgba(110,168,255,.1); color: var(--accent);
+}
+.plan-status.success {
+  background: rgba(74,222,128,.1); color: var(--success);
+}
+.plan-status.error {
+  background: rgba(248,113,113,.1); color: var(--danger);
+}
+
+.plan-spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid var(--accent); border-top-color: transparent;
+  border-radius: 50%; animation: spin .6s linear infinite;
+  vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Drop placeholder */
 .drop-placeholder {
