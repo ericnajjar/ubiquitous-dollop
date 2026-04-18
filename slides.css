@@ -191,7 +191,7 @@ a {
 }
 
 .slide-list li {
-  padding: 10px 12px;
+  padding: 8px;
   border-radius: 10px;
   cursor: pointer;
   font-size: 13px;
@@ -200,8 +200,8 @@ a {
   border: 1px solid transparent;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .slide-list li:hover {
@@ -215,15 +215,93 @@ a {
   color: var(--text);
 }
 
-.slide-num {
-  width: 22px;
-  height: 22px;
+.slide-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
   border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 8% 10%;
+  gap: 5%;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.slide-list li.active .slide-thumb {
+  border-color: var(--accent);
+}
+
+.thumb-title {
+  font-size: 7.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  flex-shrink: 0;
+}
+
+.thumb-body {
+  font-size: 5.5px;
+  opacity: 0.7;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  white-space: pre-wrap;
+}
+
+.thumb-center {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  flex: 1;
+}
+
+.thumb-image-cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb-image-fit {
+  flex: 1;
+  width: 100%;
+  object-fit: contain;
+  min-height: 0;
+}
+
+.thumb-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.thumb-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.slide-num {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
   background: var(--surface-2);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   flex-shrink: 0;
 }

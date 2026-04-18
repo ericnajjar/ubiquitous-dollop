@@ -389,7 +389,7 @@
     });
     const viewport = document.getElementById("viewport");
     if (tool === "select") viewport.style.cursor = "default";
-    else if (tool === "arrow") viewport.style.cursor = "crosshair";
+    else if (tool === "hand") viewport.style.cursor = "grab";
     else viewport.style.cursor = "crosshair";
   }
 
@@ -407,6 +407,13 @@
       return;
     }
     if (e.button !== 0) return;
+
+    if (state.tool === "hand") {
+      panning = true;
+      panLast = { x: e.clientX, y: e.clientY };
+      document.getElementById("viewport").style.cursor = "grabbing";
+      return;
+    }
 
     const pos = getCanvasPos(e);
     const world = screenToWorld(pos.x, pos.y);
@@ -492,6 +499,7 @@
   function onMouseUp(e) {
     if (panning) {
       panning = false;
+      if (state.tool === "hand") document.getElementById("viewport").style.cursor = "grab";
       save();
       return;
     }
@@ -663,6 +671,7 @@
     if (e.key === "d" || e.key === "D") setTool("diamond");
     if (e.key === "t" || e.key === "T") setTool("text");
     if (e.key === "a" || e.key === "A") setTool("arrow");
+    if (e.key === "h" || e.key === "H") setTool("hand");
   }
 
   function deleteSelected() {

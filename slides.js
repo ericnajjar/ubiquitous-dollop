@@ -333,13 +333,69 @@
     setupImageDropZones();
   }
 
+  function thumbEsc(s) {
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function thumbTrunc(s, n) {
+    s = String(s || "").split("\n")[0].trim();
+    return s.length > n ? s.slice(0, n) + "…" : s;
+  }
+
+  function renderSlideThumbnailHTML(slide) {
+    const c = slide.content;
+    const t = slide.template;
+    const title = (text, max = 40) => `<div class="thumb-title">${thumbEsc(thumbTrunc(text, max))}</div>`;
+    const body = (text, max = 80) => `<div class="thumb-body">${thumbEsc(thumbTrunc(text, max))}</div>`;
+    const imgCover = (src) => src ? `<img class="thumb-image-cover" src="${src}" alt="">` : `<div class="thumb-center" style="opacity:.35;font-size:9px">🖼</div>`;
+    const imgFit = (src) => src ? `<img class="thumb-image-fit" src="${src}" alt="">` : `<div style="opacity:.35;font-size:9px;text-align:center">🖼</div>`;
+
+    switch (t) {
+      case "title":
+        return `<div class="thumb-center">${title(c.title, 40)}${body(c.subtitle, 60)}</div>`;
+      case "title-body":
+        return `${title(c.title)}${body(c.body)}`;
+      case "two-column":
+        return `${title(c.title)}<div class="thumb-body">${thumbEsc(thumbTrunc(c.left, 40))} · ${thumbEsc(thumbTrunc(c.right, 40))}</div>`;
+      case "bullets":
+        return `${title(c.title)}${body(c.bullets)}`;
+      case "section":
+        return `<div class="thumb-center"><div class="thumb-title" style="font-size:10px">${thumbEsc(thumbTrunc(c.heading, 40))}</div></div>`;
+      case "quote":
+        return `<div class="thumb-center"><div class="thumb-body" style="font-style:italic">${thumbEsc(thumbTrunc(c.quote, 80))}</div></div>`;
+      case "blank":
+        return `<div class="thumb-center">${body(c.content)}</div>`;
+      case "title-image":
+        return `${title(c.title)}${imgFit(c.image)}`;
+      case "full-image":
+        return imgCover(c.image);
+      case "image-caption":
+        return `${imgFit(c.image)}${body(c.caption, 50)}`;
+      default:
+        return "";
+    }
+  }
+
   function renderSlideList() {
     const list = document.getElementById("slideList");
     list.innerHTML = "";
     currentSlides().forEach((slide, i) => {
       const li = document.createElement("li");
       if (i === state.currentSlide) li.classList.add("active");
-      li.innerHTML = `<span class="slide-num">${i + 1}</span> ${TEMPLATES[slide.template]?.name || slide.template}`;
+
+      const thumb = document.createElement("div");
+      thumb.className = "slide-thumb";
+      thumb.style.background = slide.bgColor || "#1a1a2e";
+      thumb.style.color = slide.textColor || "#ffffff";
+      thumb.style.fontFamily = slide.font || "system-ui";
+      thumb.innerHTML = renderSlideThumbnailHTML(slide);
+
+      const meta = document.createElement("div");
+      meta.className = "slide-thumb-meta";
+      meta.innerHTML = `<span class="slide-num">${i + 1}</span><span class="thumb-name">${TEMPLATES[slide.template]?.name || slide.template}</span>`;
+
+      li.appendChild(thumb);
+      li.appendChild(meta);
       li.addEventListener("click", () => goToSlide(i));
       list.appendChild(li);
     });
