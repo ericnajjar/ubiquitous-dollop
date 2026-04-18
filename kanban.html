@@ -38,12 +38,17 @@
           <button type="button" class="filter-btn" data-filter="low">🟢 Low</button>
           <button type="button" class="filter-btn" data-filter="overdue">⚠ Overdue</button>
         </div>
+        <div class="view-toggle">
+          <button type="button" class="view-toggle-btn active" data-view="board">Board</button>
+          <button type="button" class="view-toggle-btn" data-view="gantt">Gantt</button>
+        </div>
         <button type="button" class="btn btn-ghost btn-sm" id="addColumnBtn">+ Add column</button>
         <button type="button" class="btn btn-ghost btn-sm" id="notifBtn" id="notifBtn" title="Enable reminders">🔔 Reminders</button>
       </div>
     </div>
 
     <div class="board" id="board"></div>
+    <div id="ganttView" hidden></div>
   </main>
 
   <!-- Card modal -->
@@ -76,7 +81,11 @@
             <select id="cardColumn"></select>
           </div>
         </div>
-        <div class="field-row">
+        <div class="field-row field-row-3">
+          <div class="field">
+            <label for="cardStart">Start date</label>
+            <input type="date" id="cardStart" />
+          </div>
           <div class="field">
             <label for="cardDue">Due date</label>
             <input type="date" id="cardDue" />

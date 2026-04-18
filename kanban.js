@@ -89,6 +89,20 @@
   let dragCardId = null;
   let dragFromColId = null;
 
+  // ---------- View state ----------
+  let viewMode = "board"; // "board" | "gantt"
+
+  function setView(mode) {
+    viewMode = mode;
+    document.getElementById("board").hidden = mode !== "board";
+    document.getElementById("ganttView").hidden = mode !== "gantt";
+    document.getElementById("addColumnBtn").style.display = mode === "gantt" ? "none" : "";
+    document.querySelectorAll(".view-toggle-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.view === mode);
+    });
+    if (mode === "gantt") renderGantt();
+  }
+
   // ---------- Filter state ----------
   let activeFilter = "all";
 
@@ -108,6 +122,7 @@
   function renderAll() {
     renderBoard();
     updateCountdowns();
+    if (viewMode === "gantt") renderGantt();
   }
 
   function renderBoard() {
@@ -360,6 +375,171 @@
     return btn;
   }
 
+  // ---------- Gantt ----------
+  function renderGantt() {
+    const container = document.getElementById("ganttView");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const entries = [];
+    state.columns.forEach((col) => {
+      col.cards.forEach((card) => {
+        if (!cardMatchesFilter(card)) return;
+        if (!card.startDate && !card.dueDate) return;
+        entries.push({ card, col });
+      });
+    });
+
+    if (!entries.length) {
+      const msg = document.createElement("p");
+      msg.className = "gantt-empty";
+      msg.textContent = "No cards with dates yet. Add a start or due date to a card to see it here.";
+      container.appendChild(msg);
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const allDates = [today];
+    entries.forEach(({ card }) => {
+      if (card.startDate) allDates.push(new Date(card.startDate + "T00:00:00"));
+      if (card.dueDate) allDates.push(new Date(card.dueDate + "T00:00:00"));
+    });
+
+    const minDate = new Date(Math.min(...allDates));
+    const maxDate = new Date(Math.max(...allDates));
+    minDate.setDate(minDate.getDate() - 2);
+    maxDate.setDate(maxDate.getDate() + 3);
+    const totalMs = maxDate - minDate;
+    const totalDays = Math.ceil(totalMs / 86400000);
+
+    function datePct(dateStr) {
+      const d = new Date(dateStr + "T00:00:00");
+      return Math.max(0, Math.min(100, ((d - minDate) / totalMs) * 100));
+    }
+    const todayPct = Math.max(0, Math.min(100, ((today - minDate) / totalMs) * 100));
+
+    // Build ticks (weekly for <=60 days, monthly otherwise)
+    const ticks = [];
+    if (totalDays <= 60) {
+      const first = new Date(minDate);
+      const dow = first.getDay();
+      first.setDate(first.getDate() + (8 - dow) % 7); // advance to next Monday
+      for (let d = new Date(first); d <= maxDate; d.setDate(d.getDate() + 7)) {
+        const nd = new Date(d);
+        ticks.push({ pct: ((nd - minDate) / totalMs) * 100, label: nd.toLocaleDateString(undefined, { month: "short", day: "numeric" }) });
+      }
+    } else {
+      for (let d = new Date(minDate.getFullYear(), minDate.getMonth(), 1); d <= maxDate; d.setMonth(d.getMonth() + 1)) {
+        const nd = new Date(d);
+        ticks.push({ pct: ((nd - minDate) / totalMs) * 100, label: nd.toLocaleDateString(undefined, { month: "short", year: "2-digit" }) });
+      }
+    }
+
+    function makeTrack(cls, h) {
+      const t = document.createElement("div");
+      t.className = "gantt-track " + cls;
+      if (h) t.style.height = h + "px";
+      ticks.forEach(({ pct }) => {
+        if (pct < 0 || pct > 100) return;
+        const gl = document.createElement("div");
+        gl.className = "gantt-grid-line";
+        gl.style.left = pct + "%";
+        t.appendChild(gl);
+      });
+      const tl = document.createElement("div");
+      tl.className = "gantt-today-line";
+      tl.style.left = todayPct + "%";
+      t.appendChild(tl);
+      return t;
+    }
+
+    const wrap = document.createElement("div");
+    wrap.className = "gantt-wrap";
+
+    // Header row with tick labels
+    const hdrRow = document.createElement("div");
+    hdrRow.className = "gantt-row gantt-header-row";
+    const hdrLabel = document.createElement("div");
+    hdrLabel.className = "gantt-label";
+    const hdrTrack = makeTrack("gantt-header-track", 36);
+    ticks.forEach(({ pct, label }) => {
+      if (pct < 0 || pct > 100) return;
+      const el = document.createElement("div");
+      el.className = "gantt-tick-label";
+      el.style.left = pct + "%";
+      el.textContent = label;
+      hdrTrack.appendChild(el);
+    });
+    hdrRow.appendChild(hdrLabel);
+    hdrRow.appendChild(hdrTrack);
+    wrap.appendChild(hdrRow);
+
+    // One group per column
+    state.columns.forEach((col) => {
+      const colEntries = entries.filter((e) => e.col.id === col.id);
+      if (!colEntries.length) return;
+
+      const groupRow = document.createElement("div");
+      groupRow.className = "gantt-row gantt-group-hdr-row";
+      const groupLabel = document.createElement("div");
+      groupLabel.className = "gantt-label gantt-group-label";
+      groupLabel.textContent = col.title;
+      const groupTrack = makeTrack("gantt-group-track", 28);
+      groupRow.appendChild(groupLabel);
+      groupRow.appendChild(groupTrack);
+      wrap.appendChild(groupRow);
+
+      colEntries.forEach(({ card }) => {
+        const row = document.createElement("div");
+        row.className = "gantt-row gantt-card-row";
+        row.addEventListener("click", () => openModal(card, col.id));
+
+        const label = document.createElement("div");
+        label.className = "gantt-label gantt-card-label";
+        const dot = document.createElement("span");
+        dot.className = `gantt-priority-dot priority-${card.priority}`;
+        const titleSpan = document.createElement("span");
+        titleSpan.textContent = card.title.length > 22 ? card.title.slice(0, 22) + "…" : card.title;
+        titleSpan.title = card.title;
+        label.appendChild(dot);
+        label.appendChild(titleSpan);
+
+        const track = makeTrack("gantt-card-track", 44);
+
+        const startPct = card.startDate ? datePct(card.startDate) : null;
+        const endPct = card.dueDate ? datePct(card.dueDate) : null;
+
+        if (startPct !== null && endPct !== null) {
+          const bar = document.createElement("div");
+          bar.className = `gantt-bar priority-${card.priority}`;
+          const left = Math.min(startPct, endPct);
+          bar.style.left = left + "%";
+          bar.style.width = Math.max(Math.abs(endPct - startPct), 0.5) + "%";
+          bar.title = `${card.title}\n${card.startDate} → ${card.dueDate}`;
+          bar.addEventListener("click", (e) => { e.stopPropagation(); openModal(card, col.id); });
+          track.appendChild(bar);
+        } else {
+          const mp = endPct ?? startPct;
+          if (mp !== null) {
+            const ms = document.createElement("div");
+            ms.className = `gantt-milestone priority-${card.priority}`;
+            ms.style.left = mp + "%";
+            ms.title = card.title;
+            ms.addEventListener("click", (e) => { e.stopPropagation(); openModal(card, col.id); });
+            track.appendChild(ms);
+          }
+        }
+
+        row.appendChild(label);
+        row.appendChild(track);
+        wrap.appendChild(row);
+      });
+    });
+
+    container.appendChild(wrap);
+  }
+
   // ---------- Modal ----------
   let editingCardId = null;
   let editingColId = null;
@@ -392,6 +572,7 @@
     document.getElementById("cardTitle").value = card?.title || "";
     document.getElementById("cardDesc").value = card?.description || "";
     document.getElementById("cardPriority").value = card?.priority || "medium";
+    document.getElementById("cardStart").value = card?.startDate ? toDateInput(card.startDate) : "";
     document.getElementById("cardDue").value = card?.dueDate ? toDateInput(card.dueDate) : "";
     document.getElementById("cardReminder").value = card?.reminder ? toDateInput(card.reminder) : "";
     document.getElementById("cardTags").value = card?.tags?.join(", ") || "";
@@ -425,6 +606,7 @@
     if (!title) { document.getElementById("cardTitle").focus(); return; }
 
     const targetColId = document.getElementById("cardColumn").value;
+    const startRaw = document.getElementById("cardStart").value;
     const dueRaw = document.getElementById("cardDue").value;
     const reminderRaw = document.getElementById("cardReminder").value;
     const tags = document.getElementById("cardTags").value
@@ -434,6 +616,7 @@
       title,
       description: document.getElementById("cardDesc").value.trim(),
       priority: document.getElementById("cardPriority").value,
+      startDate: startRaw || "",
       dueDate: dueRaw || "",
       reminder: reminderRaw || "",
       tags,
@@ -524,6 +707,11 @@
     });
 
     renderAll();
+
+    // View toggle
+    document.querySelectorAll(".view-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => setView(btn.dataset.view));
+    });
 
     // Add column button
     document.getElementById("addColumnBtn").addEventListener("click", addColumn);
