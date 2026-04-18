@@ -408,8 +408,8 @@
 
     const minDate = new Date(Math.min(...allDates));
     const maxDate = new Date(Math.max(...allDates));
-    minDate.setDate(minDate.getDate() - 2);
-    maxDate.setDate(maxDate.getDate() + 3);
+    minDate.setDate(minDate.getDate() - 3);
+    maxDate.setDate(maxDate.getDate() + 14);
     const totalMs = maxDate - minDate;
     const totalDays = Math.ceil(totalMs / 86400000);
 
@@ -514,8 +514,9 @@
           const bar = document.createElement("div");
           bar.className = `gantt-bar priority-${card.priority}`;
           const left = Math.min(startPct, endPct);
+          const rawW = Math.max(Math.abs(endPct - startPct), 0.5);
           bar.style.left = left + "%";
-          bar.style.width = Math.max(Math.abs(endPct - startPct), 0.5) + "%";
+          bar.style.width = Math.min(rawW, 100 - left) + "%";
           bar.title = `${card.title}\n${card.startDate} → ${card.dueDate}`;
           bar.addEventListener("click", (e) => { e.stopPropagation(); openModal(card, col.id); });
           track.appendChild(bar);

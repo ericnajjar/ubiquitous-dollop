@@ -318,10 +318,10 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert
   min-height: 36px; overflow: hidden; flex-shrink: 0;
 }
 
-.gantt-track { position: relative; overflow: hidden; }
+.gantt-track { position: relative; overflow: visible; }
 
-.gantt-header-row { background: var(--surface-2); position: sticky; top: 64px; z-index: 5; }
-.gantt-header-track { height: 36px; }
+.gantt-header-row { background: var(--surface-2); }
+.gantt-header-track { height: 36px; overflow: hidden; }
 
 .gantt-tick-label {
   position: absolute; top: 50%;
