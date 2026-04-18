@@ -97,6 +97,7 @@
         </div>
 
         <div class="control-group actions-group">
+          <button type="button" class="btn btn-primary btn-sm" id="generateDeckBtn">Generate deck</button>
           <button type="button" class="btn btn-ghost btn-sm" id="duplicateSlideBtn">Duplicate slide</button>
           <button type="button" class="btn btn-ghost btn-sm danger" id="deleteSlideBtn">Delete slide</button>
           <span class="spacer"></span>
@@ -115,6 +116,43 @@
       </div>
     </section>
   </main>
+
+  <!-- Generate deck modal -->
+  <div class="modal-overlay" id="genOverlay" hidden>
+    <div class="gen-modal" role="dialog" aria-modal="true">
+      <div class="gen-modal-header">
+        <h2>Generate a deck</h2>
+        <button type="button" class="modal-close" id="genCloseBtn" aria-label="Close">&times;</button>
+      </div>
+      <div class="gen-modal-body">
+        <div class="field">
+          <label for="genApiKey">Claude API key</label>
+          <input type="password" id="genApiKey" placeholder="sk-ant-..." autocomplete="off" />
+          <span class="gen-hint">Stored locally. Only sent to Anthropic.</span>
+        </div>
+        <div class="field">
+          <label>Upload a document</label>
+          <div class="gen-upload-row">
+            <label class="btn btn-ghost btn-sm gen-file-btn">
+              Choose file
+              <input type="file" id="genFileInput" accept=".txt,.md,.csv,.rtf" />
+            </label>
+            <span class="gen-file-name" id="genFileName">No file chosen</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="genDocText">Or paste content</label>
+          <textarea id="genDocText" rows="8" placeholder="Paste a project brief, report, meeting notes, or any text to turn into a slide deck…"></textarea>
+        </div>
+        <div class="gen-status" id="genStatus" hidden></div>
+      </div>
+      <div class="gen-modal-footer">
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="genCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="genGoBtn">Generate deck</button>
+      </div>
+    </div>
+  </div>
 
   <footer class="site-footer">
     <div class="container footer-inner">

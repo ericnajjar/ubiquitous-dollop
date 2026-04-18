@@ -3,6 +3,7 @@
   const STORE_KEY = "datascope_slides";
   const CHART_IMPORT_KEY = "datascope_chart_to_slides";
   const GLOBAL_PROJECTS_KEY = "datascope_projects";
+  const API_KEY_STORE = "datascope_anthropic_key";
 
   // ---------- Templates ----------
   const TEMPLATES = {
@@ -913,8 +914,146 @@ render();
     saveState();
   }
 
+  // ---------- Generate deck (AI) ----------
+  function openGenModal() {
+    document.getElementById("genApiKey").value = localStorage.getItem(API_KEY_STORE) || "";
+    document.getElementById("genDocText").value = "";
+    document.getElementById("genFileName").textContent = "No file chosen";
+    document.getElementById("genFileInput").value = "";
+    document.getElementById("genGoBtn").disabled = false;
+    document.getElementById("genGoBtn").textContent = "Generate deck";
+    const status = document.getElementById("genStatus");
+    status.hidden = true;
+    status.className = "gen-status";
+    document.getElementById("genOverlay").hidden = false;
+    document.getElementById("genDocText").focus();
+  }
+
+  function closeGenModal() {
+    document.getElementById("genOverlay").hidden = true;
+  }
+
+  function setGenStatus(type, message) {
+    const el = document.getElementById("genStatus");
+    el.hidden = false;
+    el.className = `gen-status ${type}`;
+    el.innerHTML = type === "loading"
+      ? `<span class="gen-spinner"></span>${message}`
+      : message;
+  }
+
+  async function handleGenerateDeck() {
+    const apiKey = document.getElementById("genApiKey").value.trim();
+    if (!apiKey) { setGenStatus("error", "Please enter your Claude API key."); return; }
+
+    const docText = document.getElementById("genDocText").value.trim();
+    if (!docText) { setGenStatus("error", "Please paste or upload a document."); return; }
+
+    localStorage.setItem(API_KEY_STORE, apiKey);
+
+    const btn = document.getElementById("genGoBtn");
+    btn.disabled = true;
+    btn.textContent = "Generating…";
+    setGenStatus("loading", "Creating your slide deck…");
+
+    try {
+      const slides = await callSlidesAPI(apiKey, docText);
+
+      const deckName = slides[0]?.content?.title || "Generated Deck";
+      const font = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+      const deckSlides = slides.map((s) => {
+        const template = TEMPLATES[s.template] ? s.template : "title-body";
+        const defaults = { ...TEMPLATES[template].fields };
+        const content = {};
+        for (const key of Object.keys(defaults)) {
+          content[key] = (s.content && s.content[key] != null) ? String(s.content[key]) : defaults[key];
+        }
+        return {
+          template,
+          content,
+          font,
+          textColor: "#ffffff",
+          bgColor: "#1a1a2e",
+        };
+      });
+
+      saveFieldsFromDOM();
+      state.projects.push({ id: uid(), name: deckName, slides: deckSlides });
+      state.currentProject = state.projects.length - 1;
+      state.currentSlide = 0;
+      saveState();
+      renderAll();
+
+      setGenStatus("success", `Created "${deckName}" with ${deckSlides.length} slides.`);
+      setTimeout(closeGenModal, 1500);
+    } catch (err) {
+      setGenStatus("error", err.message);
+      btn.disabled = false;
+      btn.textContent = "Generate deck";
+    }
+  }
+
+  async function callSlidesAPI(apiKey, documentText) {
+    const validTemplates = Object.keys(TEMPLATES).filter((t) => !t.includes("image"));
+    const systemPrompt = `You are a presentation designer. Create a slide deck from the provided document.
+
+Return ONLY a JSON array of slide objects. Each slide must have:
+- "template": one of ${JSON.stringify(validTemplates)}
+- "content": an object with the fields required by that template:
+  - "title": { "title": "...", "subtitle": "..." }
+  - "title-body": { "title": "...", "body": "..." }
+  - "bullets": { "title": "...", "bullets": "• Point 1\\n• Point 2\\n• Point 3" }
+  - "section": { "heading": "..." }
+  - "quote": { "quote": "...", "attribution": "— Author" }
+  - "two-column": { "title": "...", "left": "...", "right": "..." }
+  - "blank": { "content": "..." }
+
+Guidelines:
+- Start with a "title" slide that captures the document's main theme
+- Use "section" slides to separate major topics
+- Use "bullets" for key points and lists
+- Use "title-body" for detailed explanations (keep body text concise)
+- Use "two-column" for comparisons, pros/cons, or side-by-side info
+- Use "quote" for notable quotes from the document
+- Keep all text concise — slides should be scannable, not paragraphs
+- Aim for 6-15 slides depending on document length
+- End with a summary, conclusion, or next-steps slide
+- Return ONLY valid JSON, no markdown fences or commentary`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: `Create a slide deck from this document:\n\n${documentText}` }],
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API request failed (${response.status})`);
+    }
+
+    const data = await response.json();
+    const text = data.content[0].text;
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error("Could not parse slides from the API response.");
+
+    const slides = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(slides) || !slides.length) throw new Error("No slides were generated.");
+    return slides;
+  }
+
   // ---------- Keyboard nav ----------
   function onKeyDown(e) {
+    if (e.key === "Escape") { closeGenModal(); return; }
     if (e.target.closest("[contenteditable]")) return;
     if (e.key === "ArrowLeft") prevSlide();
     if (e.key === "ArrowRight") nextSlide();
@@ -961,6 +1100,25 @@ render();
     document
       .getElementById("bgColorInput")
       .addEventListener("input", (e) => onBgColorChange(e.target.value));
+
+    // Generate deck
+    document.getElementById("generateDeckBtn").addEventListener("click", openGenModal);
+    document.getElementById("genCloseBtn").addEventListener("click", closeGenModal);
+    document.getElementById("genCancelBtn").addEventListener("click", closeGenModal);
+    document.getElementById("genGoBtn").addEventListener("click", handleGenerateDeck);
+    document.getElementById("genOverlay").addEventListener("click", (e) => {
+      if (e.target === document.getElementById("genOverlay")) closeGenModal();
+    });
+    document.getElementById("genFileInput").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById("genFileName").textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        document.getElementById("genDocText").value = ev.target.result;
+      };
+      reader.readAsText(file);
+    });
 
     // Export
     document.getElementById("exportPngSlideBtn").addEventListener("click", exportSlidePng);
