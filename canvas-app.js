@@ -10,7 +10,7 @@
     tool: "select",
     fillColor: "#1d254a",
     strokeColor: "#6ea8ff",
-    selected: null,
+    selected: new Set(),
     pan: { x: 0, y: 0 },
     zoom: 1,
   };
@@ -23,6 +23,8 @@
   let panning = false;
   let panLast = { x: 0, y: 0 };
   let snapGuides = [];
+  let marquee = null;
+  let dragShapeStarts = {};
   const SNAP_THRESHOLD = 8;
 
   let canvas, ctx;
@@ -175,7 +177,7 @@
     }
 
     // Shapes
-    state.shapes.forEach((s) => drawShape(s, s.id === state.selected));
+    state.shapes.forEach((s) => drawShape(s, state.selected.has(s.id)));
 
     // Creation preview
     if (creating && creating.type !== "arrow" && creating.w !== undefined) {
@@ -183,6 +185,7 @@
     }
 
     drawSnapGuides();
+    drawMarquee();
 
     ctx.restore();
   }
@@ -361,6 +364,23 @@
     ctx.restore();
   }
 
+  function drawMarquee() {
+    if (!marquee) return;
+    const x = Math.min(marquee.startX, marquee.startX + marquee.w);
+    const y = Math.min(marquee.startY, marquee.startY + marquee.h);
+    const w = Math.abs(marquee.w);
+    const h = Math.abs(marquee.h);
+    ctx.save();
+    ctx.fillStyle = "rgba(110, 168, 255, 0.1)";
+    ctx.strokeStyle = "rgba(110, 168, 255, 0.6)";
+    ctx.lineWidth = 1 / state.zoom;
+    ctx.setLineDash([4 / state.zoom, 4 / state.zoom]);
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // ---------- Tool management ----------
   function setTool(tool) {
     state.tool = tool;
@@ -393,14 +413,24 @@
 
     if (state.tool === "select") {
       const hit = hitTest(world.x, world.y);
-      state.selected = hit ? hit.id : null;
-
       if (hit) {
+        if (e.metaKey || e.ctrlKey) {
+          const ns = new Set(state.selected);
+          if (ns.has(hit.id)) ns.delete(hit.id); else ns.add(hit.id);
+          state.selected = ns;
+        } else if (!state.selected.has(hit.id)) {
+          state.selected = new Set([hit.id]);
+        }
         dragging = true;
-        dragOffset = { x: world.x - hit.x, y: world.y - hit.y };
+        dragStart = { x: world.x, y: world.y };
+        dragShapeStarts = {};
+        for (const id of state.selected) {
+          const s = state.shapes.find((sh) => sh.id === id);
+          if (s) dragShapeStarts[id] = { x: s.x, y: s.y };
+        }
       } else {
-        panning = true;
-        panLast = { x: e.clientX, y: e.clientY };
+        if (!(e.metaKey || e.ctrlKey)) state.selected = new Set();
+        marquee = { startX: world.x, startY: world.y, w: 0, h: 0 };
       }
       draw();
     } else if (state.tool === "arrow") {
@@ -408,11 +438,11 @@
       if (hit) {
         arrowStart = hit.id;
         creating = { type: "arrow", currentX: world.x, currentY: world.y };
-        state.selected = hit.id;
+        state.selected = new Set([hit.id]);
       }
       draw();
     } else {
-      state.selected = null;
+      state.selected = new Set();
       creating = { type: state.tool, startX: world.x, startY: world.y, w: 0, h: 0 };
       draw();
     }
@@ -430,14 +460,23 @@
     const pos = getCanvasPos(e);
     const world = screenToWorld(pos.x, pos.y);
 
-    if (dragging && state.selected) {
-      const shape = state.shapes.find((s) => s.id === state.selected);
-      if (shape) {
-        shape.x = world.x - dragOffset.x;
-        shape.y = world.y - dragOffset.y;
-        computeSnap(shape);
-        draw();
+    if (dragging && state.selected.size) {
+      const dx = world.x - dragStart.x;
+      const dy = world.y - dragStart.y;
+      for (const id of state.selected) {
+        const s = state.shapes.find((sh) => sh.id === id);
+        const st = dragShapeStarts[id];
+        if (s && st) { s.x = st.x + dx; s.y = st.y + dy; }
       }
+      if (state.selected.size === 1) {
+        const shape = state.shapes.find((s) => state.selected.has(s.id));
+        if (shape) computeSnap(shape);
+      }
+      draw();
+    } else if (marquee) {
+      marquee.w = world.x - marquee.startX;
+      marquee.h = world.y - marquee.startY;
+      draw();
     } else if (creating) {
       if (creating.type === "arrow") {
         creating.currentX = world.x;
@@ -461,6 +500,23 @@
       dragging = false;
       snapGuides = [];
       save();
+      draw();
+      return;
+    }
+
+    if (marquee) {
+      const mx = Math.min(marquee.startX, marquee.startX + marquee.w);
+      const my = Math.min(marquee.startY, marquee.startY + marquee.h);
+      const mw = Math.abs(marquee.w);
+      const mh = Math.abs(marquee.h);
+      if (mw > 2 || mh > 2) {
+        const sel = new Set();
+        for (const s of state.shapes) {
+          if (s.x + s.w > mx && s.x < mx + mw && s.y + s.h > my && s.y < my + mh) sel.add(s.id);
+        }
+        state.selected = sel;
+      }
+      marquee = null;
       draw();
       return;
     }
@@ -506,7 +562,7 @@
           fontSize: 14,
         };
         state.shapes.push(shape);
-        state.selected = shape.id;
+        state.selected = new Set([shape.id]);
         creating = null;
         save();
         draw();
@@ -525,7 +581,7 @@
         fontSize: 14,
       };
       state.shapes.push(shape);
-      state.selected = shape.id;
+      state.selected = new Set([shape.id]);
       creating = null;
       save();
       draw();
@@ -538,7 +594,7 @@
     const world = screenToWorld(pos.x, pos.y);
     const hit = hitTest(world.x, world.y);
     if (hit) {
-      state.selected = hit.id;
+      state.selected = new Set([hit.id]);
       draw();
       openTextEditor(hit);
     }
@@ -610,10 +666,10 @@
   }
 
   function deleteSelected() {
-    if (!state.selected) return;
-    state.shapes = state.shapes.filter((s) => s.id !== state.selected);
-    state.arrows = state.arrows.filter((a) => a.from !== state.selected && a.to !== state.selected);
-    state.selected = null;
+    if (!state.selected.size) return;
+    state.shapes = state.shapes.filter((s) => !state.selected.has(s.id));
+    state.arrows = state.arrows.filter((a) => !state.selected.has(a.from) && !state.selected.has(a.to));
+    state.selected = new Set();
     save();
     draw();
   }
@@ -652,7 +708,7 @@
   }
 
   function exportPng(all) {
-    const shapes = all ? [...state.shapes] : state.shapes.filter((s) => s.id === state.selected);
+    const shapes = all ? [...state.shapes] : state.shapes.filter((s) => state.selected.has(s.id));
     if (!shapes.length) { alert(all ? "Nothing to export." : "Select a shape first."); return; }
     const ids = new Set(shapes.map((s) => s.id));
     const arrows = state.arrows.filter((a) => ids.has(a.from) && ids.has(a.to));
@@ -665,7 +721,7 @@
   }
 
   function sendToSlides(all) {
-    const shapes = all ? [...state.shapes] : state.shapes.filter((s) => s.id === state.selected);
+    const shapes = all ? [...state.shapes] : state.shapes.filter((s) => state.selected.has(s.id));
     if (!shapes.length) { alert(all ? "Nothing to send." : "Select a shape first."); return; }
     const ids = new Set(shapes.map((s) => s.id));
     const arrows = state.arrows.filter((a) => ids.has(a.from) && ids.has(a.to));
@@ -697,16 +753,16 @@
     document.getElementById("strokeColor").value = state.strokeColor;
     document.getElementById("fillColor").addEventListener("input", (e) => {
       state.fillColor = e.target.value;
-      if (state.selected) {
-        const s = state.shapes.find((sh) => sh.id === state.selected);
-        if (s) { s.fill = e.target.value; save(); draw(); }
+      if (state.selected.size) {
+        state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.fill = e.target.value; });
+        save(); draw();
       }
     });
     document.getElementById("strokeColor").addEventListener("input", (e) => {
       state.strokeColor = e.target.value;
-      if (state.selected) {
-        const s = state.shapes.find((sh) => sh.id === state.selected);
-        if (s) { s.stroke = e.target.value; save(); draw(); }
+      if (state.selected.size) {
+        state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.stroke = e.target.value; });
+        save(); draw();
       }
     });
 
@@ -715,7 +771,7 @@
       if (!confirm("Clear all shapes and arrows?")) return;
       state.shapes = [];
       state.arrows = [];
-      state.selected = null;
+      state.selected = new Set();
       save();
       draw();
     });
