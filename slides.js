@@ -426,12 +426,96 @@
     });
   }
 
+  function renderDeckLibrary() {
+    const container = document.getElementById("deckLibrary");
+    const empty = document.getElementById("deckLibraryEmpty");
+    if (!container) return;
+    container.innerHTML = "";
+
+    if (!state.projects.length) {
+      if (empty) empty.hidden = false;
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    state.projects.forEach((proj, idx) => {
+      const firstSlide = proj.slides && proj.slides[0];
+      if (!firstSlide) return;
+
+      const tile = document.createElement("div");
+      tile.className = "deck-tile";
+
+      const preview = document.createElement("div");
+      preview.className = "deck-tile-preview";
+      preview.style.background = firstSlide.bgColor || "#1a1a2e";
+      preview.style.color = firstSlide.textColor || "#ffffff";
+      preview.style.fontFamily = firstSlide.font || "system-ui";
+      preview.innerHTML = renderSlideThumbnailHTML(firstSlide);
+
+      const footer = document.createElement("div");
+      footer.className = "deck-tile-footer";
+
+      const nameEl = document.createElement("div");
+      nameEl.className = "deck-tile-name";
+      nameEl.textContent = proj.name.length > 28 ? proj.name.slice(0, 28) + "…" : proj.name;
+
+      const countEl = document.createElement("div");
+      countEl.className = "deck-tile-count";
+      const n = proj.slides.length;
+      countEl.textContent = `${n} slide${n !== 1 ? "s" : ""}`;
+
+      footer.appendChild(nameEl);
+      footer.appendChild(countEl);
+
+      const actions = document.createElement("div");
+      actions.className = "deck-tile-actions";
+
+      const loadBtn = document.createElement("button");
+      loadBtn.className = "btn btn-ghost btn-sm";
+      loadBtn.textContent = "Load";
+      loadBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        switchProject(idx);
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "btn btn-ghost btn-sm danger";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (state.projects.length <= 1) {
+          alert("You need at least one deck.");
+          return;
+        }
+        if (!confirm(`Delete deck "${proj.name}"?`)) return;
+        state.projects.splice(idx, 1);
+        if (state.currentProject >= state.projects.length) {
+          state.currentProject = state.projects.length - 1;
+        }
+        state.currentSlide = 0;
+        saveState();
+        renderAll();
+      });
+
+      actions.appendChild(loadBtn);
+      actions.appendChild(deleteBtn);
+
+      tile.appendChild(preview);
+      tile.appendChild(footer);
+      tile.appendChild(actions);
+
+      tile.addEventListener("click", () => switchProject(idx));
+      container.appendChild(tile);
+    });
+  }
+
   function renderAll() {
     renderProjectSelect();
     renderSlideList();
     renderSlidePreview();
     renderControls();
     renderDeckProjectSelect();
+    renderDeckLibrary();
   }
 
   // ---------- Project operations ----------
