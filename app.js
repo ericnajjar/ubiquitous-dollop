@@ -876,6 +876,20 @@
     window.location.href = "slides.html";
   }
 
+  function captureChartThumbnail() {
+    if (!state.chart) return null;
+    const src = state.chart.canvas;
+    const W = 320;
+    const H = Math.round(src.height * (W / src.width));
+    const off = document.createElement("canvas");
+    off.width = W; off.height = H;
+    const oc = off.getContext("2d");
+    oc.fillStyle = "#161d3d";
+    oc.fillRect(0, 0, W, H);
+    oc.drawImage(src, 0, 0, W, H);
+    return off.toDataURL("image/jpeg", 0.75);
+  }
+
   // ---------- Saved charts ----------
   const SAVED_CHARTS_KEY = "datascope_saved_charts";
 
@@ -937,12 +951,14 @@
       stacked: document.getElementById("stackToggle").checked,
       font: document.getElementById("fontFamilySelect").value,
       fontSize: document.getElementById("fontSizeSelect").value,
+      thumbnail: captureChartThumbnail(),
       savedAt: new Date().toISOString(),
     };
     charts.push(chartData);
     persistSavedCharts(charts);
     document.getElementById("chartName").value = "";
     renderSavedChartsSelect();
+    renderChartLibrary();
   }
 
   function loadSavedChart(id) {
@@ -985,6 +1001,87 @@
     charts.splice(idx, 1);
     persistSavedCharts(charts);
     renderSavedChartsSelect();
+    renderChartLibrary();
+  }
+
+  function renderChartLibrary() {
+    const grid = document.getElementById("chartLibrary");
+    const empty = document.getElementById("libraryEmpty");
+    if (!grid) return;
+    const charts = loadSavedCharts();
+    grid.innerHTML = "";
+    empty.hidden = charts.length > 0;
+
+    charts.forEach((c) => {
+      const tile = document.createElement("article");
+      tile.className = "chart-tile";
+
+      const preview = document.createElement("div");
+      preview.className = "chart-tile-preview";
+      if (c.thumbnail) {
+        const img = document.createElement("img");
+        img.src = c.thumbnail;
+        img.alt = c.name;
+        preview.appendChild(img);
+      } else {
+        const ph = document.createElement("span");
+        ph.className = "chart-tile-placeholder";
+        ph.textContent = c.chartType || "chart";
+        preview.appendChild(ph);
+      }
+
+      const footer = document.createElement("div");
+      footer.className = "chart-tile-footer";
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "chart-tile-name";
+      nameEl.title = c.name;
+      nameEl.textContent = c.name;
+
+      const actions = document.createElement("div");
+      actions.className = "chart-tile-actions";
+
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button";
+      loadBtn.className = "btn btn-ghost btn-sm";
+      loadBtn.textContent = "Load";
+      loadBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        loadSavedChart(c.id);
+        document.getElementById("explorer").scrollIntoView({ behavior: "smooth" });
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-ghost btn-sm danger";
+      delBtn.title = "Delete";
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const all = loadSavedCharts();
+        const idx = all.findIndex((ch) => ch.id === c.id);
+        if (idx === -1) return;
+        if (!confirm(`Delete "${all[idx].name}"?`)) return;
+        all.splice(idx, 1);
+        persistSavedCharts(all);
+        renderSavedChartsSelect();
+        renderChartLibrary();
+      });
+
+      actions.appendChild(loadBtn);
+      actions.appendChild(delBtn);
+      footer.appendChild(nameEl);
+      footer.appendChild(actions);
+      tile.appendChild(preview);
+      tile.appendChild(footer);
+
+      tile.addEventListener("click", () => {
+        loadSavedChart(c.id);
+        document.getElementById("explorer").scrollIntoView({ behavior: "smooth" });
+      });
+
+      grid.appendChild(tile);
+    });
   }
 
   function renderSavedChartsSelect() {
@@ -1069,6 +1166,7 @@
     // Saved charts
     renderChartProjectSelect("");
     renderSavedChartsSelect();
+    renderChartLibrary();
     document.getElementById("saveChartBtn").addEventListener("click", saveChart);
     document.getElementById("savedChartsSelect").addEventListener("change", (e) => loadSavedChart(e.target.value));
     document.getElementById("deleteSavedChartBtn").addEventListener("click", deleteSavedChart);
