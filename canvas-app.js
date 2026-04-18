@@ -25,7 +25,9 @@
   let snapGuides = [];
   let marquee = null;
   let dragShapeStarts = {};
+  let resizing = null;
   const SNAP_THRESHOLD = 8;
+  const HANDLE_SIZE = 8;
 
   let canvas, ctx;
 
@@ -92,6 +94,52 @@
 
     if (snapX !== null) { shape.x = snapX; snapGuides.push({ axis: "x", pos: guideX }); }
     if (snapY !== null) { shape.y = snapY; snapGuides.push({ axis: "y", pos: guideY }); }
+  }
+
+  // ---------- Resize handles ----------
+  function getHandlePositions(s) {
+    return {
+      tl: { x: s.x, y: s.y },
+      t:  { x: s.x + s.w / 2, y: s.y },
+      tr: { x: s.x + s.w, y: s.y },
+      r:  { x: s.x + s.w, y: s.y + s.h / 2 },
+      br: { x: s.x + s.w, y: s.y + s.h },
+      b:  { x: s.x + s.w / 2, y: s.y + s.h },
+      bl: { x: s.x, y: s.y + s.h },
+      l:  { x: s.x, y: s.y + s.h / 2 },
+    };
+  }
+
+  function hitTestHandle(wx, wy) {
+    if (state.selected.size !== 1) return null;
+    const shapeId = [...state.selected][0];
+    const s = state.shapes.find((sh) => sh.id === shapeId);
+    if (!s) return null;
+    const hs = (HANDLE_SIZE + 4) / state.zoom / 2;
+    const positions = getHandlePositions(s);
+    for (const [name, pos] of Object.entries(positions)) {
+      if (Math.abs(wx - pos.x) <= hs && Math.abs(wy - pos.y) <= hs) {
+        return { handle: name, shapeId: s.id };
+      }
+    }
+    return null;
+  }
+
+  function handleCursor(handle) {
+    const map = { tl: "nwse-resize", br: "nwse-resize", tr: "nesw-resize", bl: "nesw-resize", t: "ns-resize", b: "ns-resize", l: "ew-resize", r: "ew-resize" };
+    return map[handle] || "default";
+  }
+
+  function drawHandles(s) {
+    const positions = getHandlePositions(s);
+    const hs = HANDLE_SIZE / state.zoom;
+    ctx.fillStyle = "#fbbf24";
+    ctx.strokeStyle = "#0b1020";
+    ctx.lineWidth = 1.5 / state.zoom;
+    for (const pos of Object.values(positions)) {
+      ctx.fillRect(pos.x - hs / 2, pos.y - hs / 2, hs, hs);
+      ctx.strokeRect(pos.x - hs / 2, pos.y - hs / 2, hs, hs);
+    }
   }
 
   // ---------- Hit testing ----------
@@ -178,6 +226,12 @@
 
     // Shapes
     state.shapes.forEach((s) => drawShape(s, state.selected.has(s.id)));
+
+    // Resize handles
+    if (state.selected.size === 1) {
+      const sel = state.shapes.find((s) => state.selected.has(s.id));
+      if (sel) drawHandles(sel);
+    }
 
     // Creation preview
     if (creating && creating.type !== "arrow" && creating.w !== undefined) {
@@ -419,6 +473,23 @@
     const world = screenToWorld(pos.x, pos.y);
 
     if (state.tool === "select") {
+      const handleHit = hitTestHandle(world.x, world.y);
+      if (handleHit) {
+        const s = state.shapes.find((sh) => sh.id === handleHit.shapeId);
+        if (s) {
+          resizing = {
+            handle: handleHit.handle,
+            shapeId: s.id,
+            startX: world.x,
+            startY: world.y,
+            origX: s.x, origY: s.y,
+            origW: s.w, origH: s.h,
+          };
+          document.getElementById("viewport").style.cursor = handleCursor(handleHit.handle);
+          return;
+        }
+      }
+
       const hit = hitTest(world.x, world.y);
       if (hit) {
         if (e.metaKey || e.ctrlKey) {
@@ -467,6 +538,38 @@
     const pos = getCanvasPos(e);
     const world = screenToWorld(pos.x, pos.y);
 
+    if (resizing) {
+      const s = state.shapes.find((sh) => sh.id === resizing.shapeId);
+      if (s) {
+        const dx = world.x - resizing.startX;
+        const dy = world.y - resizing.startY;
+        const h = resizing.handle;
+        const left = h === "tl" || h === "l" || h === "bl";
+        const right = h === "tr" || h === "r" || h === "br";
+        const top = h === "tl" || h === "t" || h === "tr";
+        const bottom = h === "bl" || h === "b" || h === "br";
+
+        let nx = resizing.origX, ny = resizing.origY;
+        let nw = resizing.origW, nh = resizing.origH;
+        if (left)   { nx += dx; nw -= dx; }
+        if (right)  { nw += dx; }
+        if (top)    { ny += dy; nh -= dy; }
+        if (bottom) { nh += dy; }
+
+        if (nw < MIN_SHAPE_SIZE) {
+          if (left) nx = resizing.origX + resizing.origW - MIN_SHAPE_SIZE;
+          nw = MIN_SHAPE_SIZE;
+        }
+        if (nh < MIN_SHAPE_SIZE) {
+          if (top) ny = resizing.origY + resizing.origH - MIN_SHAPE_SIZE;
+          nh = MIN_SHAPE_SIZE;
+        }
+        s.x = nx; s.y = ny; s.w = nw; s.h = nh;
+      }
+      draw();
+      return;
+    }
+
     if (dragging && state.selected.size) {
       const dx = world.x - dragStart.x;
       const dy = world.y - dragStart.y;
@@ -493,6 +596,9 @@
         creating.h = world.y - creating.startY;
       }
       draw();
+    } else if (state.tool === "select") {
+      const hh = hitTestHandle(world.x, world.y);
+      document.getElementById("viewport").style.cursor = hh ? handleCursor(hh.handle) : "default";
     }
   }
 
@@ -501,6 +607,13 @@
       panning = false;
       if (state.tool === "hand") document.getElementById("viewport").style.cursor = "grab";
       save();
+      return;
+    }
+
+    if (resizing) {
+      resizing = null;
+      save();
+      draw();
       return;
     }
 
