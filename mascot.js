@@ -196,6 +196,99 @@
     return project;
   }
 
+  // ---------- Actions (write to localStorage) ----------
+  function actionCreateCard(params) {
+    const KANBAN_KEY = "datascope_kanban";
+    let state;
+    try { state = JSON.parse(localStorage.getItem(KANBAN_KEY)); } catch (_) {}
+    if (!state || !state.columns || !state.columns.length) {
+      state = { title: "My Board", columns: [
+        { id: uid(), title: "To Do", cards: [] },
+        { id: uid(), title: "In Progress", cards: [] },
+        { id: uid(), title: "Done", cards: [] },
+      ]};
+    }
+    const colName = (params.column || "To Do").toLowerCase();
+    let col = state.columns.find((c) => c.title.toLowerCase() === colName);
+    if (!col) col = state.columns[0];
+    const cards = Array.isArray(params.cards) ? params.cards : [params];
+    const created = [];
+    cards.forEach((p) => {
+      const card = {
+        id: uid(),
+        title: String(p.title || "Untitled").slice(0, 120),
+        description: String(p.description || ""),
+        priority: ["high", "medium", "low"].includes(p.priority) ? p.priority : "medium",
+        startDate: p.startDate || "",
+        dueDate: p.dueDate || "",
+        reminder: "",
+        tags: Array.isArray(p.tags) ? p.tags.map((t) => String(t).slice(0, 30)) : [],
+        projectId: "",
+        createdAt: new Date().toISOString(),
+      };
+      col.cards.push(card);
+      created.push(card.title);
+    });
+    try { localStorage.setItem(KANBAN_KEY, JSON.stringify(state)); } catch (_) {}
+    return { count: created.length, column: col.title, titles: created };
+  }
+
+  function actionCreateDeck(params) {
+    const SLIDES_KEY = "datascope_slides";
+    const VALID_TEMPLATES = ["title", "title-body", "two-column", "bullets", "section", "quote", "blank"];
+    let state;
+    try { state = JSON.parse(localStorage.getItem(SLIDES_KEY)); } catch (_) {}
+    if (!state) state = { projects: [], currentProject: 0, currentSlide: 0 };
+    if (!state.projects) state.projects = [];
+    const deckName = params.name || "New Deck";
+    const rawSlides = Array.isArray(params.slides) ? params.slides : [];
+    const slides = rawSlides.map((s) => {
+      const template = VALID_TEMPLATES.includes(s.template) ? s.template : "title-body";
+      const content = s.content || {};
+      return {
+        template,
+        content,
+        font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+        textColor: "#ffffff",
+        bgColor: "#1a1a2e",
+      };
+    });
+    if (!slides.length) {
+      slides.push({ template: "title", content: { title: deckName, subtitle: "" }, font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif', textColor: "#ffffff", bgColor: "#1a1a2e" });
+    }
+    state.projects.push({ id: uid(), name: deckName, slides });
+    state.currentProject = state.projects.length - 1;
+    state.currentSlide = 0;
+    try { localStorage.setItem(SLIDES_KEY, JSON.stringify(state)); } catch (_) {}
+    return { name: deckName, slideCount: slides.length };
+  }
+
+  function executeActions(text) {
+    const results = [];
+    const regex = /<action>([\s\S]*?)<\/action>/g;
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      try {
+        const action = JSON.parse(m[1]);
+        if (action.type === "create_project") {
+          const p = createProject(action.name || "Untitled", action.description || "");
+          results.push(`Created project "${p.name}".`);
+        } else if (action.type === "create_cards") {
+          const r = actionCreateCard(action);
+          results.push(`Added ${r.count} card${r.count !== 1 ? "s" : ""} to "${r.column}".`);
+        } else if (action.type === "create_deck") {
+          const r = actionCreateDeck(action);
+          results.push(`Created deck "${r.name}" with ${r.slideCount} slides.`);
+        }
+      } catch (_) {}
+    }
+    return results;
+  }
+
+  function stripActionTags(text) {
+    return text.replace(/<action>[\s\S]*?<\/action>/g, "").trim();
+  }
+
   // ---------- Page context ----------
   function getPageContext() {
     const page = detectCurrentPage();
@@ -283,7 +376,28 @@ DataScope tools:
 
 ${pageCtx}
 
-Be concise and direct — 1–3 sentences unless detail is needed. Use **bold** sparingly. Answer questions, give advice, help think through problems, and explain features. If you don't know something specific about the user's data, say so and offer general help.`;
+## Actions
+You can create items for the user by including an <action> JSON block in your response. The user will see the results immediately. Always confirm what you're about to create, then include the action block.
+
+**Create a project:**
+<action>{"type":"create_project","name":"Project Name","description":"Optional description"}</action>
+
+**Create board cards** (one or multiple):
+<action>{"type":"create_cards","column":"To Do","cards":[{"title":"Card title","description":"Details","priority":"medium","tags":["tag1"],"dueDate":"2025-03-01"}]}</action>
+Valid priorities: high, medium, low. Column defaults to "To Do" if omitted.
+
+**Create a slide deck:**
+<action>{"type":"create_deck","name":"Deck Name","slides":[{"template":"title","content":{"title":"Welcome","subtitle":"A great deck"}},{"template":"bullets","content":{"title":"Key Points","bullets":"• Point 1\\n• Point 2"}},{"template":"title-body","content":{"title":"Details","body":"More info here"}}]}</action>
+Valid templates: title, title-body, two-column, bullets, section, quote, blank.
+Template fields — title: {title, subtitle}, title-body: {title, body}, two-column: {title, left, right}, bullets: {title, bullets}, section: {heading}, quote: {quote, attribution}, blank: {content}.
+
+Rules:
+- Only create items when the user explicitly asks you to.
+- Briefly describe what you'll create before the action block.
+- You may include multiple action blocks in one response.
+- After the action block, tell the user to refresh or navigate to the relevant page to see their new items.
+
+Be concise and direct — 1–3 sentences unless detail is needed. Use **bold** sparingly. Answer questions, give advice, help think through problems, and explain features.`;
   }
 
   // ---------- Claude API (streaming) ----------
@@ -346,8 +460,19 @@ Be concise and direct — 1–3 sentences unless detail is needed. Use **bold** 
         } catch (_) {}
       }
     }
-    el.innerHTML = formatText(full);
     chatHistory.push({ role: "assistant", content: full });
+
+    const actionResults = executeActions(full);
+    const cleaned = stripActionTags(full);
+    el.innerHTML = formatText(cleaned);
+
+    if (actionResults.length) {
+      const badge = document.createElement("div");
+      badge.className = "mascot-action-result";
+      badge.innerHTML = actionResults.map((r) => `<span class="mascot-action-badge">✓ ${formatText(r)}</span>`).join("");
+      el.appendChild(badge);
+      container.scrollTop = container.scrollHeight;
+    }
   }
 
   // ---------- Response generation ----------
