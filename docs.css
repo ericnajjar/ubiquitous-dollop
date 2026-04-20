@@ -125,6 +125,46 @@ a { color: inherit; text-decoration: none; }
   color: var(--muted); text-align: center; padding: 40px 20px; font-size: 14px;
 }
 
+/* Free-form prose area */
+.doc-prose {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 0 0 8px;
+  overflow: hidden;
+}
+.doc-prose::placeholder { color: var(--muted); }
+.doc-prose[hidden] { display: none; }
+
+/* Divider before stories section */
+.stories-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.stories-divider::before,
+.stories-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.stories-divider[hidden] { display: none; }
+
 /* Story blocks */
 .stories-container {
   display: flex; flex-direction: column; gap: 20px;

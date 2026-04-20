@@ -62,13 +62,17 @@
     const doc = currentDoc();
     const container = document.getElementById("storiesContainer");
     const emptyMsg = document.getElementById("editorEmpty");
+    const prose = document.getElementById("docProse");
+    const divider = document.getElementById("storiesDivider");
     const titleInput = document.getElementById("docTitle");
     const deleteBtn = document.getElementById("deleteDocBtn");
     const addStoryBtn = document.getElementById("addStoryBtn");
 
     if (!doc) {
       emptyMsg.hidden = false;
-      container.querySelectorAll(".story-block").forEach((el) => el.remove());
+      prose.hidden = true;
+      divider.hidden = true;
+      container.innerHTML = "";
       titleInput.value = "";
       titleInput.disabled = true;
       deleteBtn.hidden = true;
@@ -78,24 +82,30 @@
     }
 
     emptyMsg.hidden = true;
+    prose.hidden = false;
     titleInput.disabled = false;
     titleInput.value = doc.title;
     deleteBtn.hidden = false;
     addStoryBtn.hidden = false;
     populateProjectSelect(doc.projectId || "");
 
-    container.querySelectorAll(".story-block").forEach((el) => el.remove());
+    // Only update prose value on doc switch (avoid resetting cursor mid-type)
+    if (prose.dataset.docId !== doc.id) {
+      prose.value = doc.body || "";
+      prose.dataset.docId = doc.id;
+      autoGrow(prose);
+    }
 
+    divider.hidden = doc.stories.length === 0;
+    container.innerHTML = "";
     doc.stories.forEach((story, idx) => {
       container.appendChild(buildStoryBlock(story, idx));
     });
+  }
 
-    if (!doc.stories.length) {
-      const hint = document.createElement("p");
-      hint.className = "stories-empty";
-      hint.textContent = "No stories yet. Click \"+ Story\" to add one.";
-      container.appendChild(hint);
-    }
+  function autoGrow(el) {
+    el.style.height = "auto";
+    el.style.height = Math.max(el.scrollHeight, 160) + "px";
   }
 
   function buildStoryBlock(story, idx) {
@@ -184,6 +194,7 @@
     const doc = {
       id: uid(),
       title: "Untitled Document",
+      body: "",
       stories: [],
       projectId: "",
       createdAt: new Date().toISOString(),
@@ -218,6 +229,7 @@
     saveDocs();
     renderEditor();
     renderSidebar();
+    document.getElementById("storiesDivider").hidden = false;
     const blocks = document.querySelectorAll(".story-block");
     const last = blocks[blocks.length - 1];
     if (last) {
@@ -257,6 +269,16 @@
     document.getElementById("newDocBtn").addEventListener("click", createDoc);
     document.getElementById("addStoryBtn").addEventListener("click", addStory);
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
+
+    const prose = document.getElementById("docProse");
+    prose.addEventListener("input", () => {
+      const doc = currentDoc();
+      if (!doc) return;
+      doc.body = prose.value;
+      doc.updatedAt = new Date().toISOString();
+      saveDocs();
+      autoGrow(prose);
+    });
 
     document.getElementById("docTitle").addEventListener("input", () => {
       const doc = currentDoc();

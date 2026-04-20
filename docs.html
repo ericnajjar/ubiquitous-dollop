@@ -52,9 +52,12 @@
           <button type="button" class="btn btn-ghost btn-sm danger" id="deleteDocBtn">Delete</button>
         </div>
       </div>
-      <div class="stories-container" id="storiesContainer">
-        <p class="editor-empty" id="editorEmpty">Select or create a document to get started.</p>
+      <p class="editor-empty" id="editorEmpty">Select or create a document to get started.</p>
+      <textarea class="doc-prose" id="docProse" placeholder="Start writing…" hidden></textarea>
+      <div class="stories-divider" id="storiesDivider" hidden>
+        <span>Stories</span>
       </div>
+      <div class="stories-container" id="storiesContainer"></div>
     </section>
   </main>
 
