@@ -104,6 +104,133 @@
     if (mode === "gantt") renderGantt();
   }
 
+  // ---------- Multi-select state ----------
+  let selectedCards = new Set();
+  let selectionMode = false;
+
+  function toggleCardSelection(cardId) {
+    if (selectedCards.has(cardId)) selectedCards.delete(cardId);
+    else selectedCards.add(cardId);
+    const el = document.querySelector(`.card[data-card-id="${cardId}"]`);
+    if (el) el.classList.toggle("selected", selectedCards.has(cardId));
+    updateBulkBar();
+  }
+
+  function enterSelectionMode() {
+    selectionMode = true;
+    selectedCards.clear();
+    const btn = document.getElementById("selectModeBtn");
+    if (btn) { btn.textContent = "✕ Cancel"; btn.classList.add("active"); }
+    renderAll();
+    renderBulkBar();
+  }
+
+  function exitSelectionMode() {
+    selectionMode = false;
+    selectedCards.clear();
+    const btn = document.getElementById("selectModeBtn");
+    if (btn) { btn.textContent = "Select"; btn.classList.remove("active"); }
+    renderAll();
+    const bar = document.getElementById("bulkBar");
+    if (bar) bar.remove();
+  }
+
+  function renderBulkBar() {
+    let bar = document.getElementById("bulkBar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "bulkBar";
+      bar.className = "bulk-bar";
+      const boardHeader = document.querySelector(".board-header");
+      boardHeader.insertAdjacentElement("afterend", bar);
+    }
+    updateBulkBar();
+  }
+
+  function updateBulkBar() {
+    const bar = document.getElementById("bulkBar");
+    if (!bar) return;
+    const count = selectedCards.size;
+    const projects = loadGlobalProjects();
+    bar.innerHTML = `
+      <span class="bulk-count">${count ? `${count} card${count !== 1 ? "s" : ""} selected` : "Select cards to take action"}</span>
+      <div class="bulk-actions${count ? "" : " bulk-actions-hidden"}">
+        <div class="bulk-group">
+          <select id="bulkProjectSel" class="bulk-select">
+            <option value="">Assign to project…</option>
+            ${projects.map((p) => `<option value="${p.id}">${p.name}</option>`).join("")}
+          </select>
+          <button class="btn btn-ghost btn-sm" id="bulkAssignBtn">Apply</button>
+        </div>
+        <div class="bulk-group">
+          <select id="bulkColSel" class="bulk-select">
+            <option value="">Move to column…</option>
+            ${state.columns.map((c) => `<option value="${c.id}">${c.title}</option>`).join("")}
+          </select>
+          <button class="btn btn-ghost btn-sm" id="bulkMoveBtn">Apply</button>
+        </div>
+        <div class="bulk-group">
+          <select id="bulkPriSel" class="bulk-select">
+            <option value="">Set priority…</option>
+            <option value="high">🔴 High</option>
+            <option value="medium">🟡 Medium</option>
+            <option value="low">🟢 Low</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="bulkPriBtn">Apply</button>
+        </div>
+        <button class="btn btn-ghost btn-sm danger" id="bulkDeleteBtn">Delete</button>
+      </div>
+    `;
+    if (count) {
+      document.getElementById("bulkAssignBtn").addEventListener("click", () => {
+        const v = document.getElementById("bulkProjectSel").value;
+        if (v) bulkSetField("projectId", v);
+      });
+      document.getElementById("bulkMoveBtn").addEventListener("click", () => {
+        const v = document.getElementById("bulkColSel").value;
+        if (v) bulkMoveToColumn(v);
+      });
+      document.getElementById("bulkPriBtn").addEventListener("click", () => {
+        const v = document.getElementById("bulkPriSel").value;
+        if (v) bulkSetField("priority", v);
+      });
+      document.getElementById("bulkDeleteBtn").addEventListener("click", bulkDelete);
+    }
+  }
+
+  function bulkSetField(field, value) {
+    state.columns.forEach((col) => {
+      col.cards.forEach((card) => { if (selectedCards.has(card.id)) card[field] = value; });
+    });
+    save();
+    exitSelectionMode();
+  }
+
+  function bulkMoveToColumn(targetColId) {
+    const targetCol = state.columns.find((c) => c.id === targetColId);
+    if (!targetCol) return;
+    const moving = [];
+    state.columns.forEach((col) => {
+      col.cards = col.cards.filter((card) => {
+        if (selectedCards.has(card.id)) { moving.push(card); return false; }
+        return true;
+      });
+    });
+    targetCol.cards.push(...moving);
+    save();
+    exitSelectionMode();
+  }
+
+  function bulkDelete() {
+    const count = selectedCards.size;
+    if (!confirm(`Delete ${count} card${count !== 1 ? "s" : ""}?`)) return;
+    state.columns.forEach((col) => {
+      col.cards = col.cards.filter((card) => !selectedCards.has(card.id));
+    });
+    save();
+    exitSelectionMode();
+  }
+
   // ---------- Filter state ----------
   let activeFilter = "all";
 
@@ -124,6 +251,7 @@
     renderBoard();
     updateCountdowns();
     if (viewMode === "gantt") renderGantt();
+    if (selectionMode) updateBulkBar();
   }
 
   function renderBoard() {
@@ -264,19 +392,34 @@
   function buildCard(card, colId) {
     const el = document.createElement("div");
     el.className = `card priority-${card.priority}`;
-    el.draggable = true;
     el.dataset.cardId = card.id;
 
-    el.addEventListener("dragstart", () => {
-      dragCardId = card.id;
-      dragFromColId = colId;
-      el.classList.add("dragging");
-      setTimeout(() => el.classList.add("dragging"), 0);
-    });
-    el.addEventListener("dragend", () => {
-      el.classList.remove("dragging");
-      document.querySelector(".drop-placeholder")?.remove();
-    });
+    if (selectionMode) {
+      el.classList.toggle("selected", selectedCards.has(card.id));
+      el.draggable = false;
+
+      const cb = document.createElement("div");
+      cb.className = "card-checkbox";
+      cb.setAttribute("aria-label", "Select card");
+      cb.innerHTML = selectedCards.has(card.id)
+        ? `<svg viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        : "";
+      el.appendChild(cb);
+
+      el.addEventListener("click", (e) => { e.stopPropagation(); toggleCardSelection(card.id); });
+    } else {
+      el.draggable = true;
+      el.addEventListener("dragstart", () => {
+        dragCardId = card.id;
+        dragFromColId = colId;
+        el.classList.add("dragging");
+        setTimeout(() => el.classList.add("dragging"), 0);
+      });
+      el.addEventListener("dragend", () => {
+        el.classList.remove("dragging");
+        document.querySelector(".drop-placeholder")?.remove();
+      });
+    }
 
     const title = document.createElement("p");
     title.className = "card-title";
@@ -331,7 +474,7 @@
     footer.appendChild(editBtn);
     el.appendChild(footer);
 
-    el.addEventListener("click", () => openModal(card, colId));
+    if (!selectionMode) el.addEventListener("click", () => openModal(card, colId));
     return el;
   }
 
@@ -849,6 +992,21 @@ Guidelines:
     document.querySelectorAll(".view-toggle-btn").forEach((btn) => {
       btn.addEventListener("click", () => setView(btn.dataset.view));
     });
+
+    // Select mode button (injected into board-actions)
+    const selectBtn = document.createElement("button");
+    selectBtn.type = "button";
+    selectBtn.id = "selectModeBtn";
+    selectBtn.className = "btn btn-ghost btn-sm";
+    selectBtn.textContent = "Select";
+    selectBtn.addEventListener("click", () => {
+      if (selectionMode) exitSelectionMode();
+      else enterSelectionMode();
+    });
+    document.querySelector(".board-actions").insertBefore(
+      selectBtn,
+      document.getElementById("addColumnBtn")
+    );
 
     // Add column button
     document.getElementById("addColumnBtn").addEventListener("click", addColumn);

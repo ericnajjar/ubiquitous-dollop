@@ -187,6 +187,76 @@ a { color: inherit; text-decoration: none; }
 .card.priority-medium { border-left-color: var(--warning); }
 .card.priority-low { border-left-color: var(--success); }
 .card.hidden { display: none; }
+.card.selected { border-color: #6ea8ff; box-shadow: 0 0 0 2px rgba(110,168,255,.35); }
+.card.selected:hover { border-color: #6ea8ff; }
+
+/* Card checkbox (shown in selection mode) */
+.card-checkbox {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,.35);
+  background: rgba(255,255,255,.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color .15s, background .15s;
+  pointer-events: none;
+}
+.card.selected .card-checkbox {
+  background: #6ea8ff;
+  border-color: #6ea8ff;
+}
+.card-checkbox svg { width: 10px; height: 10px; display: block; }
+.card:not(.selected) .card-checkbox svg { display: none; }
+
+/* Selection mode cursor */
+.card.selection-mode-card { cursor: pointer; }
+
+/* Bulk action bar */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(110,168,255,.08);
+  border-bottom: 1px solid rgba(110,168,255,.2);
+  animation: fade-in .15s ease-out;
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.bulk-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: #6ea8ff;
+  white-space: nowrap;
+}
+.bulk-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.bulk-actions.bulk-actions-hidden { display: none; }
+.bulk-group { display: flex; align-items: center; gap: 4px; }
+.bulk-select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  outline: none;
+}
+.bulk-select:focus { border-color: rgba(110,168,255,.4); }
+
+/* Select mode toggle button active state */
+#selectModeBtn.active {
+  background: rgba(110,168,255,.15);
+  border-color: rgba(110,168,255,.4);
+  color: #6ea8ff;
+}
 
 .card-title {
   font-weight: 600; font-size: 14px; line-height: 1.3;
