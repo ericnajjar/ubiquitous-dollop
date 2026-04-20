@@ -916,7 +916,6 @@ render();
 
   // ---------- Generate deck (AI) ----------
   function openGenModal() {
-    document.getElementById("genApiKey").value = localStorage.getItem(API_KEY_STORE) || "";
     document.getElementById("genDocText").value = "";
     document.getElementById("genFileName").textContent = "No file chosen";
     document.getElementById("genFileInput").value = "";
@@ -943,13 +942,11 @@ render();
   }
 
   async function handleGenerateDeck() {
-    const apiKey = document.getElementById("genApiKey").value.trim();
-    if (!apiKey) { setGenStatus("error", "Please enter your Claude API key."); return; }
+    const apiKey = localStorage.getItem(API_KEY_STORE) || "";
+    if (!apiKey) { setGenStatus("error", "No API key found. Add one via the ⚙️ button in the assistant panel."); return; }
 
     const docText = document.getElementById("genDocText").value.trim();
     if (!docText) { setGenStatus("error", "Please paste or upload a document."); return; }
-
-    localStorage.setItem(API_KEY_STORE, apiKey);
 
     const btn = document.getElementById("genGoBtn");
     btn.disabled = true;

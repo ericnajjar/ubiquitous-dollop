@@ -2,6 +2,7 @@
 (() => {
   const PROJECTS_KEY = "datascope_projects";
   const MASCOT_KEY = "datascope_mascot";
+  const API_KEY_STORE = "datascope_anthropic_key";
 
   // ---------- Character SVGs ----------
   const CHARACTERS = {
@@ -267,9 +268,19 @@
           <div class="mascot-status">Online</div>
         </div>
         <button class="mascot-picker-btn" id="mascotPickerBtn" title="Change mascot">🎭</button>
+        <button class="mascot-settings-btn" id="mascotSettingsBtn" title="API key settings">⚙️</button>
         <button class="mascot-panel-close" id="mascotClose">&times;</button>
       </div>
       <div class="mascot-picker" id="mascotPicker" hidden></div>
+      <div class="mascot-settings" id="mascotSettings" hidden>
+        <label class="mascot-settings-label">Claude API key</label>
+        <div class="mascot-key-row">
+          <input type="password" class="mascot-key-input" id="mascotApiKey" placeholder="sk-ant-…" autocomplete="off" />
+          <button class="mascot-key-save" id="mascotKeySave">Save</button>
+        </div>
+        <p class="mascot-settings-hint">Stored in your browser only. Used for AI features across DataScope.</p>
+        <div class="mascot-key-status" id="mascotKeyStatus"></div>
+      </div>
       <div class="mascot-messages" id="mascotMessages"></div>
       <div class="mascot-input-area">
         <input type="text" class="mascot-input" id="mascotInput" placeholder="Tell me what you need…" autocomplete="off" />
@@ -284,6 +295,44 @@
     document.getElementById("mascotSend").addEventListener("click", handleSend);
     document.getElementById("mascotInput").addEventListener("keydown", (e) => { if (e.key === "Enter") handleSend(); });
     document.getElementById("mascotPickerBtn").addEventListener("click", togglePicker);
+    document.getElementById("mascotSettingsBtn").addEventListener("click", toggleSettings);
+    document.getElementById("mascotKeySave").addEventListener("click", saveApiKey);
+    document.getElementById("mascotApiKey").addEventListener("keydown", (e) => { if (e.key === "Enter") saveApiKey(); });
+  }
+
+  function toggleSettings() {
+    const settings = document.getElementById("mascotSettings");
+    const picker = document.getElementById("mascotPicker");
+    const isHidden = settings.hidden;
+    settings.hidden = !isHidden;
+    if (!isHidden) return;
+    picker.hidden = true;
+    try {
+      const existing = localStorage.getItem(API_KEY_STORE) || "";
+      document.getElementById("mascotApiKey").value = existing;
+    } catch (_) {}
+    document.getElementById("mascotKeyStatus").textContent = "";
+    setTimeout(() => document.getElementById("mascotApiKey").focus(), 50);
+  }
+
+  function saveApiKey() {
+    const key = document.getElementById("mascotApiKey").value.trim();
+    const status = document.getElementById("mascotKeyStatus");
+    try {
+      if (key) {
+        localStorage.setItem(API_KEY_STORE, key);
+        status.textContent = "✓ Key saved.";
+        status.className = "mascot-key-status saved";
+      } else {
+        localStorage.removeItem(API_KEY_STORE);
+        status.textContent = "Key cleared.";
+        status.className = "mascot-key-status";
+      }
+    } catch (_) {
+      status.textContent = "Could not save key.";
+      status.className = "mascot-key-status error";
+    }
+    setTimeout(() => { document.getElementById("mascotSettings").hidden = true; }, 1200);
   }
 
   function renderPicker() {

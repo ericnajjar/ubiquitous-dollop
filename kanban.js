@@ -695,7 +695,6 @@
 
   // ---------- Plan project ----------
   function openPlanModal() {
-    document.getElementById("apiKeyInput").value = localStorage.getItem(API_KEY_STORE) || "";
     document.getElementById("planDocText").value = "";
     document.getElementById("planFileName").textContent = "No file chosen";
     document.getElementById("planFileInput").value = "";
@@ -735,13 +734,11 @@
   }
 
   async function handlePlanGenerate() {
-    const apiKey = document.getElementById("apiKeyInput").value.trim();
-    if (!apiKey) { setPlanStatus("error", "Please enter your Claude API key."); return; }
+    const apiKey = localStorage.getItem(API_KEY_STORE) || "";
+    if (!apiKey) { setPlanStatus("error", "No API key found. Add one via the ⚙️ button in the assistant panel."); return; }
 
     const docText = document.getElementById("planDocText").value.trim();
     if (!docText) { setPlanStatus("error", "Please paste or upload a document."); return; }
-
-    localStorage.setItem(API_KEY_STORE, apiKey);
 
     const targetColId = document.getElementById("planTargetCol").value;
     const targetCol = state.columns.find((c) => c.id === targetColId);
