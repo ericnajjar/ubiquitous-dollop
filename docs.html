@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Docs</title>
+  <link rel="stylesheet" href="docs.css" />
+  <script src="docs.js" defer></script>
+  <link rel="stylesheet" href="mascot.css" />
+  <script src="mascot.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="docs.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope Docs</span>
+      </a>
+      <nav class="site-nav">
+        <a href="index.html">Charts</a>
+        <a href="slides.html">Slides</a>
+        <a href="kanban.html">Board</a>
+        <a href="notes.html">Notes</a>
+        <a href="canvas.html">Canvas</a>
+        <a href="docs.html" class="active">Docs</a>
+        <a href="projects.html">Projects</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="docs-app">
+    <aside class="docs-sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h3>Documents</h3>
+        <button type="button" class="btn btn-ghost btn-sm" id="newDocBtn">+ New</button>
+      </div>
+      <ul class="doc-list" id="docList"></ul>
+      <p class="doc-list-empty" id="docListEmpty" hidden>No documents yet.</p>
+    </aside>
+
+    <section class="docs-editor" id="editorPanel">
+      <div class="editor-header">
+        <input type="text" class="editor-title" id="docTitle" placeholder="Document title…" autocomplete="off" />
+        <div class="editor-actions">
+          <div class="editor-field">
+            <label for="docProject">Project</label>
+            <select id="docProject">
+              <option value="">None</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" id="addStoryBtn">+ Story</button>
+          <button type="button" class="btn btn-ghost btn-sm danger" id="deleteDocBtn">Delete</button>
+        </div>
+      </div>
+      <div class="stories-container" id="storiesContainer">
+        <p class="editor-empty" id="editorEmpty">Select or create a document to get started.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Saved in your browser.</p>
+    </div>
+  </footer>
+</body>
+</html>

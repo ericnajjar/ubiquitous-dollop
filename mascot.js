@@ -143,6 +143,11 @@
       keywords: ["canvas", "diagram", "journey", "map", "flow", "whiteboard", "draw", "shape", "arrow", "connect", "miro", "wireframe", "process"],
       description: "Visual canvas for journey maps, flowcharts, and diagrams with shapes and arrows.", emoji: "🗺️",
     },
+    docs: {
+      name: "Docs", url: "docs.html",
+      keywords: ["doc", "document", "story", "stories", "acceptance", "criteria", "requirement", "spec", "user story", "feature", "epic", "gherkin", "given", "when", "then"],
+      description: "Write user stories and acceptance criteria for your projects and board cards.", emoji: "📄",
+    },
     projects: {
       name: "Projects", url: "projects.html",
       keywords: ["project", "organiz", "manage", "hub", "link", "group", "team", "plan", "overview"],
