@@ -3,6 +3,8 @@
   const PROJECTS_KEY = "datascope_projects";
   const MASCOT_KEY = "datascope_mascot";
   const API_KEY_STORE = "datascope_anthropic_key";
+  const MODEL = "claude-sonnet-4-6";
+  let chatHistory = [];
 
   // ---------- Character SVGs ----------
   const CHARACTERS = {
@@ -194,6 +196,160 @@
     return project;
   }
 
+  // ---------- Page context ----------
+  function getPageContext() {
+    const page = detectCurrentPage();
+    const ctx = { page };
+    try {
+      if (page === "charts") {
+        const charts = JSON.parse(localStorage.getItem("datascope_saved_charts") || "[]");
+        ctx.chartCount = charts.length;
+        ctx.charts = charts.map((c) => c.name || "Untitled").slice(0, 8);
+      } else if (page === "slides") {
+        const s = JSON.parse(localStorage.getItem("datascope_slides") || "null");
+        if (s) {
+          ctx.deckCount = (s.projects || []).length;
+          ctx.decks = (s.projects || []).map((p) => ({ name: p.name, slides: (p.slides || []).length })).slice(0, 6);
+          const cur = s.projects?.[s.currentProject];
+          if (cur) ctx.currentDeck = { name: cur.name, slideCount: (cur.slides || []).length };
+        }
+      } else if (page === "board") {
+        const s = JSON.parse(localStorage.getItem("datascope_kanban") || "null");
+        if (s) {
+          ctx.boardTitle = s.title || "My Board";
+          const now = new Date();
+          ctx.columns = (s.columns || []).map((c) => ({
+            name: c.title, cardCount: (c.cards || []).length,
+            cards: (c.cards || []).slice(0, 4).map((card) => ({ title: card.title, priority: card.priority, due: card.dueDate || null })),
+          }));
+          const all = (s.columns || []).flatMap((c) => c.cards || []);
+          ctx.totalCards = all.length;
+          ctx.overdueCount = all.filter((c) => c.dueDate && new Date(c.dueDate) < now).length;
+        }
+      } else if (page === "notes") {
+        const notes = JSON.parse(localStorage.getItem("datascope_notes") || "[]");
+        ctx.noteCount = notes.length;
+        ctx.tags = [...new Set(notes.flatMap((n) => n.tags || []))].slice(0, 10);
+        ctx.recentNotes = notes.slice(0, 5).map((n) => ({ title: n.title || "(untitled)", preview: (n.body || "").slice(0, 80) }));
+      } else if (page === "canvas") {
+        const s = JSON.parse(localStorage.getItem("datascope_canvas") || "null");
+        if (s) { ctx.shapeCount = (s.shapes || []).length; ctx.arrowCount = (s.arrows || []).length; }
+      } else if (page === "projects") {
+        const projects = JSON.parse(localStorage.getItem("datascope_projects") || "[]");
+        ctx.projectCount = projects.length;
+        ctx.projects = projects.map((p) => p.name).slice(0, 10);
+      }
+    } catch (_) {}
+    return ctx;
+  }
+
+  function buildSystemPrompt(ctx) {
+    const pageLabels = {
+      charts: "Charts — interactive data visualizations (bar, line, pie, scatter) from CSV data",
+      slides: "Slides — template-based presentation deck builder with AI generation",
+      board: "Board — Kanban task manager with drag-and-drop cards, priorities, due dates, Gantt view, and AI card generation",
+      notes: "Notes — colored sticky notes with tags and search",
+      canvas: "Canvas — visual whiteboard for diagrams, flowcharts, and journey maps",
+      projects: "Projects — hub that links charts, decks, cards, and notes into projects",
+    };
+
+    let pageCtx = `The user is currently on the **${pageLabels[ctx.page] || ctx.page}** page.\n`;
+    if (ctx.page === "board" && ctx.columns) {
+      pageCtx += `Board: "${ctx.boardTitle}", ${ctx.totalCards} cards total${ctx.overdueCount ? `, ${ctx.overdueCount} overdue` : ""}.\n`;
+      pageCtx += ctx.columns.map((c) => `  - ${c.name} (${c.cardCount}): ${c.cards.map((x) => `"${x.title}" [${x.priority}]`).join(", ") || "empty"}`).join("\n");
+    } else if (ctx.page === "slides" && ctx.currentDeck) {
+      pageCtx += `Current deck: "${ctx.currentDeck.name}" (${ctx.currentDeck.slideCount} slides). ${ctx.deckCount} total decks.`;
+      if (ctx.decks?.length) pageCtx += `\nAll decks: ${ctx.decks.map((d) => `"${d.name}" (${d.slides} slides)`).join(", ")}.`;
+    } else if (ctx.page === "notes") {
+      pageCtx += `${ctx.noteCount} notes. Tags: ${ctx.tags.join(", ") || "none"}.`;
+      if (ctx.recentNotes?.length) pageCtx += `\nRecent: ${ctx.recentNotes.map((n) => `"${n.title}"`).join(", ")}.`;
+    } else if (ctx.page === "canvas") {
+      pageCtx += `${ctx.shapeCount} shapes, ${ctx.arrowCount} arrows on the canvas.`;
+    } else if (ctx.page === "charts") {
+      pageCtx += `${ctx.chartCount} saved charts${ctx.charts?.length ? `: ${ctx.charts.map((c) => `"${c}"`).join(", ")}` : ""}.`;
+    } else if (ctx.page === "projects") {
+      pageCtx += `${ctx.projectCount} projects${ctx.projects?.length ? `: ${ctx.projects.map((p) => `"${p}"`).join(", ")}` : ""}.`;
+    }
+
+    return `You are a friendly, knowledgeable assistant built into DataScope, a browser-based productivity platform. Help the user with their work on the current page and across the app.
+
+DataScope tools:
+- Charts (index.html): data visualizations from CSV
+- Slides (slides.html): presentation decks with templates + AI generation
+- Board (kanban.html): Kanban + Gantt with AI card generation from documents
+- Notes (notes.html): sticky notes with tags
+- Canvas (canvas.html): shapes, arrows, diagrams
+- Projects (projects.html): link everything together
+
+${pageCtx}
+
+Be concise and direct — 1–3 sentences unless detail is needed. Use **bold** sparingly. Answer questions, give advice, help think through problems, and explain features. If you don't know something specific about the user's data, say so and offer general help.`;
+  }
+
+  // ---------- Claude API (streaming) ----------
+  async function callClaude(userText) {
+    const apiKey = localStorage.getItem(API_KEY_STORE) || "";
+    if (!apiKey) return null;
+
+    chatHistory.push({ role: "user", content: userText });
+    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 1024,
+        system: buildSystemPrompt(getPageContext()),
+        messages: chatHistory,
+        stream: true,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+    return res.body;
+  }
+
+  async function streamToElement(body, el) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let full = "";
+    const container = document.getElementById("mascotMessages");
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") break;
+        try {
+          const chunk = JSON.parse(data);
+          const delta = chunk.delta?.text || "";
+          if (delta) {
+            full += delta;
+            el.innerHTML = formatText(full) + '<span class="mascot-cursor"></span>';
+            container.scrollTop = container.scrollHeight;
+          }
+        } catch (_) {}
+      }
+    }
+    el.innerHTML = formatText(full);
+    chatHistory.push({ role: "assistant", content: full });
+  }
+
   // ---------- Response generation ----------
   function generateResponse(input) {
     const lower = input.toLowerCase().trim();
@@ -367,6 +523,21 @@
   function showGreeting() {
     const page = detectCurrentPage();
     const name = currentName();
+    const hasKey = !!(localStorage.getItem(API_KEY_STORE) || "");
+
+    if (hasKey) {
+      const llmGreetings = {
+        charts: `Hey! I'm ${name}, your AI assistant. I can see you're in Charts — ask me anything about your data, or how to make the most of DataScope.`,
+        slides: `Hey! I'm ${name}. I can help you build out your deck, brainstorm content, or answer questions about Slides.`,
+        board: `Hey! I'm ${name}. I can see your board — ask me to help prioritize tasks, explain features, or think through your project.`,
+        notes: `Hey! I'm ${name}. I can help you organize your thoughts, suggest how to structure notes, or answer anything about DataScope.`,
+        canvas: `Hey! I'm ${name}. Ready to map something out? Ask me for help structuring a diagram or using Canvas features.`,
+        projects: `Hey! I'm ${name}. I can help you think through your project structure or explain how to link everything together.`,
+      };
+      addBotMessage(llmGreetings[page] || `Hey! I'm ${name}, your DataScope AI assistant. What can I help you with?`, []);
+      return;
+    }
+
     const greetings = {
       charts: `Hey! I'm ${name}. I see you're in Charts. Need help visualizing your data, or working on something else?`,
       slides: `Hey! I'm ${name}. Working on a presentation? I can help you organize your deck or suggest other tools.`,
@@ -388,13 +559,38 @@
     return "charts";
   }
 
-  function handleSend() {
+  async function handleSend() {
     const input = document.getElementById("mascotInput");
+    const sendBtn = document.getElementById("mascotSend");
     const text = input.value.trim();
     if (!text) return;
     input.value = "";
     addUserMessage(text);
 
+    const apiKey = localStorage.getItem(API_KEY_STORE) || "";
+
+    if (apiKey) {
+      // LLM mode
+      input.disabled = true;
+      sendBtn.disabled = true;
+      showTyping();
+      try {
+        const body = await callClaude(text);
+        removeTyping();
+        const el = createStreamingBotMessage();
+        await streamToElement(body, el);
+      } catch (err) {
+        removeTyping();
+        addBotMessage(`Sorry, something went wrong: ${err.message}. Check your API key in ⚙️ settings.`, []);
+      } finally {
+        input.disabled = false;
+        sendBtn.disabled = false;
+        setTimeout(() => input.focus(), 50);
+      }
+      return;
+    }
+
+    // Fallback keyword mode (no API key)
     if (conversationState === "expecting_project_name") {
       conversationState = "normal";
       const project = createProject(text);
@@ -448,6 +644,15 @@
   // ---------- Message rendering ----------
   function addBotMessage(text, actions) { messages.push({ type: "bot", text, actions }); renderMessage({ type: "bot", text, actions }); }
   function addUserMessage(text) { messages.push({ type: "user", text }); renderMessage({ type: "user", text }); }
+
+  function createStreamingBotMessage() {
+    const container = document.getElementById("mascotMessages");
+    const el = document.createElement("div");
+    el.className = "mascot-msg bot";
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+    return el;
+  }
 
   function renderMessage(msg) {
     const container = document.getElementById("mascotMessages");

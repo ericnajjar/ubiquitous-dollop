@@ -374,6 +374,21 @@
   filter: brightness(1.15);
 }
 
+/* Streaming cursor */
+.mascot-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #6ea8ff;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: mascot-blink 0.7s steps(1) infinite;
+}
+@keyframes mascot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* Typing indicator */
 .mascot-typing {
   display: flex;
