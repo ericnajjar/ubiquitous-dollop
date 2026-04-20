@@ -138,6 +138,11 @@
           <option value="medium"${story.priority === "medium" ? " selected" : ""}>Medium</option>
           <option value="high"${story.priority === "high" ? " selected" : ""}>High</option>
         </select>
+        <span class="story-meta-spacer"></span>
+        <div class="story-push">
+          <select class="story-col-sel"></select>
+          <button class="btn btn-ghost btn-sm story-push-btn">Push to Board</button>
+        </div>
       </div>
     `;
 
@@ -147,6 +152,30 @@
     const statusSel = block.querySelector(".story-status");
     const prioritySel = block.querySelector(".story-priority");
     const deleteBtn = block.querySelector(".story-delete");
+    const colSel = block.querySelector(".story-col-sel");
+    const pushBtn = block.querySelector(".story-push-btn");
+
+    // Populate column selector from kanban state
+    const columns = loadKanbanColumns();
+    if (columns.length) {
+      columns.forEach((col) => {
+        const opt = document.createElement("option");
+        opt.value = col.id;
+        opt.textContent = col.title;
+        colSel.appendChild(opt);
+      });
+    } else {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No board yet";
+      colSel.appendChild(opt);
+      pushBtn.disabled = true;
+    }
+
+    pushBtn.addEventListener("click", () => {
+      if (!colSel.value) return;
+      pushStoryToBoard(story, colSel.value, pushBtn);
+    });
 
     const autoSave = () => {
       story.title = titleInput.value;
@@ -247,6 +276,68 @@
     saveDocs();
     renderSidebar();
     renderEditor();
+  }
+
+  // ---------- Push to board ----------
+  function loadKanbanColumns() {
+    try {
+      const raw = localStorage.getItem("datascope_kanban");
+      if (raw) return JSON.parse(raw).columns || [];
+    } catch (_) {}
+    return [];
+  }
+
+  function pushStoryToBoard(story, colId, pushBtn) {
+    const KANBAN_KEY = "datascope_kanban";
+    let kanban;
+    try { kanban = JSON.parse(localStorage.getItem(KANBAN_KEY)); } catch (_) {}
+    if (!kanban) {
+      kanban = {
+        title: "My Board",
+        columns: [
+          { id: uidLocal(), title: "To Do", cards: [] },
+          { id: uidLocal(), title: "In Progress", cards: [] },
+          { id: uidLocal(), title: "Done", cards: [] },
+        ],
+      };
+    }
+
+    const col = kanban.columns.find((c) => c.id === colId) || kanban.columns[0];
+    if (!col) return;
+
+    const doc = currentDoc();
+    const parts = [];
+    if (story.body) parts.push(story.body);
+    if (story.acceptanceCriteria) parts.push("Acceptance Criteria:\n" + story.acceptanceCriteria);
+    const description = parts.join("\n\n");
+
+    col.cards.push({
+      id: uidLocal(),
+      title: story.title || "Untitled Story",
+      description,
+      priority: story.priority || "medium",
+      startDate: "",
+      dueDate: "",
+      reminder: "",
+      tags: ["story"],
+      projectId: doc?.projectId || "",
+      createdAt: new Date().toISOString(),
+    });
+
+    try { localStorage.setItem(KANBAN_KEY, JSON.stringify(kanban)); } catch (_) {}
+
+    pushBtn.textContent = "✓ Added to Board";
+    pushBtn.disabled = true;
+    pushBtn.classList.add("push-success");
+    setTimeout(() => {
+      pushBtn.textContent = "Push to Board";
+      pushBtn.disabled = false;
+      pushBtn.classList.remove("push-success");
+    }, 2500);
+  }
+
+  function uidLocal() {
+    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
 
   // ---------- Helpers ----------
