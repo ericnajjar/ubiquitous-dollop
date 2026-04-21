@@ -249,6 +249,19 @@
     });
 
     text.addEventListener("input", () => { task.text = text.value; saveDocs(); });
+    text.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const doc = currentDoc();
+      if (!doc) return;
+      const newTask = { id: uid(), text: "", expanded: false, children: [], linkedCard: null };
+      const idx = doc.tasks.findIndex((t) => t.id === task.id);
+      doc.tasks.splice(idx + 1, 0, newTask);
+      saveDocs();
+      renderTasks();
+      const inputs = document.querySelectorAll("#tasksList .task-row-header .task-text");
+      if (inputs[idx + 1]) inputs[idx + 1].focus();
+    });
 
     linkBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -315,6 +328,18 @@
     row.appendChild(delBtn);
 
     text.addEventListener("input", () => { child.text = text.value; saveDocs(); });
+    text.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      if (!parent.children) parent.children = [];
+      const newChild = { id: uid(), text: "", linkedCard: null };
+      const idx = parent.children.findIndex((c) => c.id === child.id);
+      parent.children.splice(idx + 1, 0, newChild);
+      saveDocs();
+      renderTasks();
+      const inputs = document.querySelectorAll("#tasksList .task-child-text");
+      if (inputs[idx + 1]) inputs[idx + 1].focus();
+    });
 
     linkBtn.addEventListener("click", (e) => {
       e.stopPropagation();
