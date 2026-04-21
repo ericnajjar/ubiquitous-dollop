@@ -116,6 +116,15 @@ a { color: inherit; text-decoration: none; }
 }
 .tool-field input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
 .tool-field input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+.tool-field input[type="number"] {
+  width: 38px; height: 26px;
+  border: 2px solid var(--border); border-radius: 6px;
+  padding: 0 3px; background: transparent; color: var(--text);
+  font: inherit; font-size: 11px; text-align: center;
+  -moz-appearance: textfield;
+}
+.tool-field input[type="number"]:focus { border-color: var(--accent); outline: none; }
+.tool-field input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
 
 .tool-spacer { flex: 1; }
 

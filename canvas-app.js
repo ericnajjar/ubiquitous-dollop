@@ -10,6 +10,7 @@
     tool: "select",
     fillColor: "#1d254a",
     strokeColor: "#6ea8ff",
+    strokeWidth: 1.5,
     selected: new Set(),
     pan: { x: 0, y: 0 },
     zoom: 1,
@@ -262,9 +263,10 @@
   }
 
   function drawShape(s, selected) {
+    const sw = s.strokeWidth || 1.5;
     ctx.fillStyle = s.fill || "#1d254a";
     ctx.strokeStyle = selected ? "#fbbf24" : (s.stroke || "#6ea8ff");
-    ctx.lineWidth = selected ? 2.5 : 1.5;
+    ctx.lineWidth = selected ? sw + 1 : sw;
 
     if (s.type === "rect") {
       const r = 6;
@@ -678,6 +680,7 @@
           h: defaultH,
           fill: creating.type === "text" ? "transparent" : state.fillColor,
           stroke: state.strokeColor,
+          strokeWidth: state.strokeWidth,
           label: "",
           textColor: "#e7ecff",
           fontSize: 14,
@@ -697,6 +700,7 @@
         x, y, w, h,
         fill: creating.type === "text" ? "transparent" : state.fillColor,
         stroke: state.strokeColor,
+        strokeWidth: state.strokeWidth,
         label: "",
         textColor: "#e7ecff",
         fontSize: 14,
@@ -873,6 +877,7 @@
 
     document.getElementById("fillColor").value = state.fillColor;
     document.getElementById("strokeColor").value = state.strokeColor;
+    document.getElementById("strokeWidth").value = state.strokeWidth;
     document.getElementById("fillColor").addEventListener("input", (e) => {
       state.fillColor = e.target.value;
       if (state.selected.size) {
@@ -884,6 +889,14 @@
       state.strokeColor = e.target.value;
       if (state.selected.size) {
         state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.stroke = e.target.value; });
+        save(); draw();
+      }
+    });
+    document.getElementById("strokeWidth").addEventListener("input", (e) => {
+      const val = Math.max(0.5, parseFloat(e.target.value) || 1.5);
+      state.strokeWidth = val;
+      if (state.selected.size) {
+        state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.strokeWidth = val; });
         save(); draw();
       }
     });

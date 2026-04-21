@@ -58,11 +58,18 @@
   }
 
   // ---------- Editor ----------
+  function bodyToHtml(body) {
+    if (!body) return "";
+    if (body.includes("<")) return body;
+    return body.split(/\n\n+/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("") || "";
+  }
+
   function renderEditor() {
     const doc = currentDoc();
     const container = document.getElementById("storiesContainer");
     const emptyMsg = document.getElementById("editorEmpty");
     const prose = document.getElementById("docProse");
+    const proseArea = document.getElementById("proseArea");
     const divider = document.getElementById("storiesDivider");
     const titleInput = document.getElementById("docTitle");
     const deleteBtn = document.getElementById("deleteDocBtn");
@@ -70,7 +77,7 @@
 
     if (!doc) {
       emptyMsg.hidden = false;
-      prose.hidden = true;
+      proseArea.hidden = true;
       divider.hidden = true;
       container.innerHTML = "";
       titleInput.value = "";
@@ -82,18 +89,17 @@
     }
 
     emptyMsg.hidden = true;
-    prose.hidden = false;
+    proseArea.hidden = false;
     titleInput.disabled = false;
     titleInput.value = doc.title;
     deleteBtn.hidden = false;
     addStoryBtn.hidden = false;
     populateProjectSelect(doc.projectId || "");
 
-    // Only update prose value on doc switch (avoid resetting cursor mid-type)
+    // Only update prose content on doc switch (avoid resetting cursor mid-type)
     if (prose.dataset.docId !== doc.id) {
-      prose.value = doc.body || "";
+      prose.innerHTML = bodyToHtml(doc.body);
       prose.dataset.docId = doc.id;
-      autoGrow(prose);
     }
 
     divider.hidden = doc.stories.length === 0;
@@ -365,10 +371,20 @@
     prose.addEventListener("input", () => {
       const doc = currentDoc();
       if (!doc) return;
-      doc.body = prose.value;
+      doc.body = prose.innerHTML;
       doc.updatedAt = new Date().toISOString();
       saveDocs();
-      autoGrow(prose);
+    });
+
+    document.querySelectorAll(".prose-btn").forEach((btn) => {
+      btn.addEventListener("mousedown", (e) => {
+        e.preventDefault(); // keep focus in prose
+        const cmd = btn.dataset.cmd;
+        const val = btn.dataset.val || null;
+        document.execCommand(cmd, false, val);
+        const doc = currentDoc();
+        if (doc) { doc.body = prose.innerHTML; saveDocs(); }
+      });
     });
 
     document.getElementById("docTitle").addEventListener("input", () => {
