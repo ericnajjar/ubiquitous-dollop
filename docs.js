@@ -114,9 +114,15 @@
 
   // ---------- Tasks ----------
   let dragSrcTaskId = null;
+  let dragSrcChildInfo = null;
 
   function clearDropIndicators() {
     document.querySelectorAll(".task-row.drop-above, .task-row.drop-below")
+      .forEach((el) => el.classList.remove("drop-above", "drop-below"));
+  }
+
+  function clearChildDropIndicators() {
+    document.querySelectorAll(".task-child-row.drop-above, .task-child-row.drop-below")
       .forEach((el) => el.classList.remove("drop-above", "drop-below"));
   }
 
@@ -292,6 +298,7 @@
   function buildChildRow(parent, child) {
     const row = document.createElement("div");
     row.className = "task-child-row";
+    row.draggable = true;
 
     const grip = document.createElement("div");
     grip.className = "task-grip small";
@@ -327,6 +334,44 @@
     row.appendChild(linkBtn);
     row.appendChild(delBtn);
 
+    // Child drag events
+    row.addEventListener("dragstart", (e) => {
+      e.stopPropagation();
+      dragSrcChildInfo = { parentId: parent.id, childId: child.id };
+      e.dataTransfer.effectAllowed = "move";
+      setTimeout(() => row.classList.add("dragging"), 0);
+    });
+    row.addEventListener("dragend", () => {
+      dragSrcChildInfo = null;
+      row.classList.remove("dragging");
+      clearChildDropIndicators();
+    });
+    row.addEventListener("dragover", (e) => {
+      if (!dragSrcChildInfo || dragSrcChildInfo.parentId !== parent.id || dragSrcChildInfo.childId === child.id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      clearChildDropIndicators();
+      const rect = row.getBoundingClientRect();
+      row.classList.add(e.clientY < rect.top + rect.height / 2 ? "drop-above" : "drop-below");
+    });
+    row.addEventListener("dragleave", (e) => {
+      if (!row.contains(e.relatedTarget)) row.classList.remove("drop-above", "drop-below");
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!dragSrcChildInfo || dragSrcChildInfo.parentId !== parent.id || dragSrcChildInfo.childId === child.id) return;
+      const insertAfter = e.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      const srcIdx = parent.children.findIndex((c) => c.id === dragSrcChildInfo.childId);
+      if (srcIdx === -1) return;
+      const [moved] = parent.children.splice(srcIdx, 1);
+      const dstIdx = parent.children.findIndex((c) => c.id === child.id);
+      parent.children.splice(insertAfter ? dstIdx + 1 : dstIdx, 0, moved);
+      clearChildDropIndicators();
+      saveDocs();
+      renderTasks();
+    });
+
     text.addEventListener("input", () => { child.text = text.value; saveDocs(); });
     text.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
@@ -359,9 +404,14 @@
   function buildCardChip(card, onUnlink) {
     const chip = document.createElement("div");
     chip.className = "task-card-chip";
-    chip.title = card.columnName ? `${card.title} · ${card.columnName}` : card.title;
+    chip.title = "Click to view details";
     const label = document.createElement("span");
+    label.className = "tcp-chip-label";
     label.textContent = card.title;
+    label.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showCardDetail(card, chip);
+    });
     const remove = document.createElement("button");
     remove.className = "tcp-remove";
     remove.textContent = "×";
@@ -370,6 +420,68 @@
     chip.appendChild(label);
     chip.appendChild(remove);
     return chip;
+  }
+
+  function findKanbanCard(cardId) {
+    const columns = loadKanbanColumns();
+    for (const col of columns) {
+      for (const card of (col.cards || [])) {
+        if (card.id === cardId) return { ...card, columnName: col.title };
+      }
+    }
+    return null;
+  }
+
+  function showCardDetail(linkedCard, anchor) {
+    document.querySelector(".task-card-detail")?.remove();
+    const full = findKanbanCard(linkedCard.id);
+    const card = full || linkedCard;
+
+    const detail = document.createElement("div");
+    detail.className = "task-card-detail";
+
+    const header = document.createElement("div");
+    header.className = "tcd-header";
+    const title = document.createElement("span");
+    title.className = "tcd-title";
+    title.textContent = card.title || "Untitled";
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "tcd-close";
+    closeBtn.textContent = "×";
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    detail.appendChild(header);
+
+    const meta = document.createElement("div");
+    meta.className = "tcd-meta";
+    if (card.columnName) { const b = document.createElement("span"); b.className = "tcd-badge"; b.textContent = card.columnName; meta.appendChild(b); }
+    if (card.priority) { const b = document.createElement("span"); b.className = "tcd-badge tcd-priority-" + card.priority; b.textContent = card.priority; meta.appendChild(b); }
+    (card.tags || []).forEach((t) => { const b = document.createElement("span"); b.className = "tcd-tag"; b.textContent = t; meta.appendChild(b); });
+    detail.appendChild(meta);
+
+    const desc = document.createElement("div");
+    desc.className = "tcd-desc";
+    desc.textContent = card.description || "No description";
+    if (!card.description) desc.classList.add("tcd-empty");
+    detail.appendChild(desc);
+
+    const link = document.createElement("a");
+    link.className = "tcd-link";
+    link.href = "kanban.html";
+    link.textContent = "View on Board →";
+    detail.appendChild(link);
+
+    closeBtn.addEventListener("click", () => { detail.remove(); document.removeEventListener("click", dismiss, true); });
+
+    document.body.appendChild(detail);
+    const rect = anchor.getBoundingClientRect();
+    detail.style.top = Math.min(rect.bottom + 4, window.innerHeight - 280) + "px";
+    detail.style.left = Math.min(rect.left, window.innerWidth - 310) + "px";
+
+    function dismiss(e) {
+      if (!detail.contains(e.target)) { detail.remove(); document.removeEventListener("click", dismiss, true); }
+    }
+    setTimeout(() => document.addEventListener("click", dismiss, true), 0);
   }
 
   function showCardPicker(anchor, onSelect) {
