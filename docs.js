@@ -113,6 +113,13 @@
   }
 
   // ---------- Tasks ----------
+  let dragSrcTaskId = null;
+
+  function clearDropIndicators() {
+    document.querySelectorAll(".task-row.drop-above, .task-row.drop-below")
+      .forEach((el) => el.classList.remove("drop-above", "drop-below"));
+  }
+
   function renderTasks() {
     const doc = currentDoc();
     const area = document.getElementById("tasksArea");
@@ -131,9 +138,15 @@
   function buildTaskRow(task) {
     const row = document.createElement("div");
     row.className = "task-row";
+    row.draggable = true;
 
     const header = document.createElement("div");
     header.className = "task-row-header";
+
+    const grip = document.createElement("div");
+    grip.className = "task-grip";
+    grip.textContent = "⠿";
+    grip.title = "Drag to reorder";
 
     const toggle = document.createElement("button");
     toggle.className = "task-toggle" + (task.expanded ? " open" : "");
@@ -147,6 +160,19 @@
     text.value = task.text || "";
     text.placeholder = "Task description…";
 
+    const chipWrap = document.createElement("div");
+    chipWrap.className = "task-chip-wrap";
+    if (task.linkedCard) {
+      chipWrap.appendChild(buildCardChip(task.linkedCard, () => {
+        task.linkedCard = null; saveDocs(); renderTasks();
+      }));
+    }
+
+    const linkBtn = document.createElement("button");
+    linkBtn.className = "task-action-btn link-btn";
+    linkBtn.title = "Link a board card";
+    linkBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M6.5 10.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1M9.5 5.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M6 8.5l4-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+
     const addChildBtn = document.createElement("button");
     addChildBtn.className = "task-action-btn";
     addChildBtn.title = "Add sub-task";
@@ -157,8 +183,11 @@
     delBtn.title = "Delete task";
     delBtn.textContent = "×";
 
+    header.appendChild(grip);
     header.appendChild(toggle);
     header.appendChild(text);
+    header.appendChild(chipWrap);
+    header.appendChild(linkBtn);
     header.appendChild(addChildBtn);
     header.appendChild(delBtn);
     row.appendChild(header);
@@ -174,6 +203,43 @@
     }
     row.appendChild(children);
 
+    // Drag events
+    row.addEventListener("dragstart", (e) => {
+      dragSrcTaskId = task.id;
+      e.dataTransfer.effectAllowed = "move";
+      setTimeout(() => row.classList.add("dragging"), 0);
+    });
+    row.addEventListener("dragend", () => {
+      dragSrcTaskId = null;
+      row.classList.remove("dragging");
+      clearDropIndicators();
+    });
+    row.addEventListener("dragover", (e) => {
+      if (!dragSrcTaskId || dragSrcTaskId === task.id) return;
+      e.preventDefault();
+      clearDropIndicators();
+      const rect = row.getBoundingClientRect();
+      row.classList.add(e.clientY < rect.top + rect.height / 2 ? "drop-above" : "drop-below");
+    });
+    row.addEventListener("dragleave", (e) => {
+      if (!row.contains(e.relatedTarget)) clearDropIndicators();
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (!dragSrcTaskId || dragSrcTaskId === task.id) return;
+      const doc = currentDoc();
+      if (!doc) return;
+      const insertAfter = e.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      const srcIdx = doc.tasks.findIndex((t) => t.id === dragSrcTaskId);
+      if (srcIdx === -1) return;
+      const [moved] = doc.tasks.splice(srcIdx, 1);
+      const dstIdx = doc.tasks.findIndex((t) => t.id === task.id);
+      doc.tasks.splice(insertAfter ? dstIdx + 1 : dstIdx, 0, moved);
+      clearDropIndicators();
+      saveDocs();
+      renderTasks();
+    });
+
     toggle.addEventListener("click", () => {
       task.expanded = !task.expanded;
       toggle.classList.toggle("open", task.expanded);
@@ -182,14 +248,16 @@
       saveDocs();
     });
 
-    text.addEventListener("input", () => {
-      task.text = text.value;
-      saveDocs();
+    text.addEventListener("input", () => { task.text = text.value; saveDocs(); });
+
+    linkBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showCardPicker(linkBtn, (card) => { task.linkedCard = card; saveDocs(); renderTasks(); });
     });
 
     addChildBtn.addEventListener("click", () => {
       if (!task.children) task.children = [];
-      task.children.push({ id: uid(), text: "" });
+      task.children.push({ id: uid(), text: "", linkedCard: null });
       task.expanded = true;
       saveDocs();
       renderTasks();
@@ -212,23 +280,45 @@
     const row = document.createElement("div");
     row.className = "task-child-row";
 
+    const grip = document.createElement("div");
+    grip.className = "task-grip small";
+    grip.textContent = "⠿";
+
     const text = document.createElement("input");
     text.type = "text";
     text.className = "task-child-text";
     text.value = child.text || "";
     text.placeholder = "Sub-task…";
 
+    const chipWrap = document.createElement("div");
+    chipWrap.className = "task-chip-wrap";
+    if (child.linkedCard) {
+      chipWrap.appendChild(buildCardChip(child.linkedCard, () => {
+        child.linkedCard = null; saveDocs(); renderTasks();
+      }));
+    }
+
+    const linkBtn = document.createElement("button");
+    linkBtn.className = "task-action-btn link-btn small";
+    linkBtn.title = "Link a board card";
+    linkBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M6.5 10.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1M9.5 5.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M6 8.5l4-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+
     const delBtn = document.createElement("button");
     delBtn.className = "task-action-btn danger small";
     delBtn.title = "Delete sub-task";
     delBtn.textContent = "×";
 
+    row.appendChild(grip);
     row.appendChild(text);
+    row.appendChild(chipWrap);
+    row.appendChild(linkBtn);
     row.appendChild(delBtn);
 
-    text.addEventListener("input", () => {
-      child.text = text.value;
-      saveDocs();
+    text.addEventListener("input", () => { child.text = text.value; saveDocs(); });
+
+    linkBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showCardPicker(linkBtn, (card) => { child.linkedCard = card; saveDocs(); renderTasks(); });
     });
 
     delBtn.addEventListener("click", () => {
@@ -239,6 +329,78 @@
     });
 
     return row;
+  }
+
+  function buildCardChip(card, onUnlink) {
+    const chip = document.createElement("div");
+    chip.className = "task-card-chip";
+    chip.title = card.columnName ? `${card.title} · ${card.columnName}` : card.title;
+    const label = document.createElement("span");
+    label.textContent = card.title;
+    const remove = document.createElement("button");
+    remove.className = "tcp-remove";
+    remove.textContent = "×";
+    remove.title = "Unlink";
+    remove.addEventListener("click", (e) => { e.stopPropagation(); onUnlink(); });
+    chip.appendChild(label);
+    chip.appendChild(remove);
+    return chip;
+  }
+
+  function showCardPicker(anchor, onSelect) {
+    document.querySelector(".task-card-picker")?.remove();
+
+    const columns = loadKanbanColumns();
+    const allCards = [];
+    columns.forEach((col) => {
+      (col.cards || []).forEach((card) => {
+        allCards.push({ id: card.id, title: card.title || "Untitled", columnName: col.title });
+      });
+    });
+
+    const picker = document.createElement("div");
+    picker.className = "task-card-picker";
+
+    if (!allCards.length) {
+      const empty = document.createElement("div");
+      empty.className = "tcp-empty";
+      empty.textContent = "No board cards yet";
+      picker.appendChild(empty);
+    } else {
+      allCards.forEach((card) => {
+        const item = document.createElement("div");
+        item.className = "task-card-picker-item";
+        const t = document.createElement("span");
+        t.className = "tcp-title";
+        t.textContent = card.title;
+        const c = document.createElement("span");
+        c.className = "tcp-col";
+        c.textContent = card.columnName;
+        item.appendChild(t);
+        item.appendChild(c);
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
+          onSelect(card);
+          picker.remove();
+          document.removeEventListener("click", dismiss, true);
+        });
+        picker.appendChild(item);
+      });
+    }
+
+    document.body.appendChild(picker);
+    const rect = anchor.getBoundingClientRect();
+    picker.style.top = (rect.bottom + 4) + "px";
+    const left = Math.min(rect.left, window.innerWidth - 244);
+    picker.style.left = left + "px";
+
+    function dismiss(e) {
+      if (!picker.contains(e.target)) {
+        picker.remove();
+        document.removeEventListener("click", dismiss, true);
+      }
+    }
+    setTimeout(() => document.addEventListener("click", dismiss, true), 0);
   }
 
   function addTask() {

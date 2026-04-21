@@ -196,6 +196,18 @@ a { color: inherit; text-decoration: none; }
   padding: 8px 10px;
 }
 
+.task-grip {
+  flex-shrink: 0; width: 20px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(154,164,199,.3); font-size: 14px; cursor: grab;
+  user-select: none; transition: color .15s;
+}
+.task-grip.small { width: 16px; font-size: 12px; }
+.task-row:hover .task-grip, .task-child-row:hover .task-grip { color: var(--muted); }
+.task-row.dragging { opacity: .4; }
+.task-row.drop-above { border-top: 2px solid var(--accent); }
+.task-row.drop-below { border-bottom: 2px solid var(--accent); }
+
 .task-toggle {
   width: 24px; height: 24px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
@@ -226,6 +238,47 @@ a { color: inherit; text-decoration: none; }
 .task-action-btn:hover { background: var(--surface-2); color: var(--accent); }
 .task-action-btn.danger:hover { background: rgba(248,113,113,.1); color: var(--danger); }
 .task-action-btn.small { width: 20px; height: 20px; font-size: 14px; }
+.task-action-btn.link-btn { color: rgba(154,164,199,.45); }
+.task-action-btn.link-btn:hover { color: var(--accent); background: rgba(110,168,255,.1); }
+
+.task-chip-wrap { display: flex; align-items: center; min-width: 0; }
+.task-card-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  max-width: 180px; padding: 2px 6px;
+  border-radius: 5px; border: 1px solid rgba(110,168,255,.25);
+  background: rgba(110,168,255,.08); color: var(--accent);
+  font-size: 11px; font-weight: 500; white-space: nowrap;
+  overflow: hidden;
+}
+.task-card-chip span { overflow: hidden; text-overflow: ellipsis; }
+.tcp-remove {
+  flex-shrink: 0; border: none; background: transparent;
+  color: var(--accent); cursor: pointer; font-size: 13px;
+  padding: 0; line-height: 1; opacity: .6;
+  transition: opacity .15s;
+}
+.tcp-remove:hover { opacity: 1; }
+
+/* Card picker dropdown */
+.task-card-picker {
+  position: fixed; z-index: 200;
+  min-width: 240px; max-width: 300px; max-height: 280px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.5);
+  padding: 6px;
+}
+.task-card-picker-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-radius: 7px; cursor: pointer;
+  transition: background .12s;
+}
+.task-card-picker-item:hover { background: var(--surface-2); }
+.tcp-title { font-size: 13px; font-weight: 500; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tcp-col { font-size: 11px; color: var(--muted); margin-left: 8px; flex-shrink: 0; }
+.tcp-empty { font-size: 13px; color: var(--muted); text-align: center; padding: 12px; }
 
 .task-children {
   padding: 0 10px 8px 34px;
@@ -234,8 +287,8 @@ a { color: inherit; text-decoration: none; }
 .task-children[hidden] { display: none; }
 
 .task-child-row {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 8px;
+  display: flex; align-items: center; gap: 5px;
+  padding: 3px 6px;
   border-radius: 6px;
   transition: background .15s;
 }
