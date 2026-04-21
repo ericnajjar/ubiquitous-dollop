@@ -78,6 +78,7 @@
     if (!doc) {
       emptyMsg.hidden = false;
       proseArea.hidden = true;
+      document.getElementById("tasksArea").hidden = true;
       divider.hidden = true;
       container.innerHTML = "";
       titleInput.value = "";
@@ -102,11 +103,153 @@
       prose.dataset.docId = doc.id;
     }
 
+    renderTasks();
+
     divider.hidden = doc.stories.length === 0;
     container.innerHTML = "";
     doc.stories.forEach((story, idx) => {
       container.appendChild(buildStoryBlock(story, idx));
     });
+  }
+
+  // ---------- Tasks ----------
+  function renderTasks() {
+    const doc = currentDoc();
+    const area = document.getElementById("tasksArea");
+    const list = document.getElementById("tasksList");
+    if (!doc) { area.hidden = true; return; }
+
+    if (!doc.tasks) doc.tasks = [];
+    area.hidden = false;
+    list.innerHTML = "";
+
+    doc.tasks.forEach((task) => {
+      list.appendChild(buildTaskRow(task));
+    });
+  }
+
+  function buildTaskRow(task) {
+    const row = document.createElement("div");
+    row.className = "task-row";
+
+    const header = document.createElement("div");
+    header.className = "task-row-header";
+
+    const toggle = document.createElement("button");
+    toggle.className = "task-toggle" + (task.expanded ? " open" : "");
+    toggle.textContent = "▸";
+    toggle.title = task.expanded ? "Collapse" : "Expand";
+    if (!task.children || !task.children.length) toggle.classList.add("empty");
+
+    const text = document.createElement("input");
+    text.type = "text";
+    text.className = "task-text";
+    text.value = task.text || "";
+    text.placeholder = "Task description…";
+
+    const addChildBtn = document.createElement("button");
+    addChildBtn.className = "task-action-btn";
+    addChildBtn.title = "Add sub-task";
+    addChildBtn.textContent = "+";
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "task-action-btn danger";
+    delBtn.title = "Delete task";
+    delBtn.textContent = "×";
+
+    header.appendChild(toggle);
+    header.appendChild(text);
+    header.appendChild(addChildBtn);
+    header.appendChild(delBtn);
+    row.appendChild(header);
+
+    const children = document.createElement("div");
+    children.className = "task-children";
+    if (!task.expanded) children.hidden = true;
+
+    if (task.children) {
+      task.children.forEach((child) => {
+        children.appendChild(buildChildRow(task, child));
+      });
+    }
+    row.appendChild(children);
+
+    toggle.addEventListener("click", () => {
+      task.expanded = !task.expanded;
+      toggle.classList.toggle("open", task.expanded);
+      toggle.title = task.expanded ? "Collapse" : "Expand";
+      children.hidden = !task.expanded;
+      saveDocs();
+    });
+
+    text.addEventListener("input", () => {
+      task.text = text.value;
+      saveDocs();
+    });
+
+    addChildBtn.addEventListener("click", () => {
+      if (!task.children) task.children = [];
+      task.children.push({ id: uid(), text: "" });
+      task.expanded = true;
+      saveDocs();
+      renderTasks();
+      const allRows = document.querySelectorAll("#tasksList .task-child-text");
+      if (allRows.length) allRows[allRows.length - 1].focus();
+    });
+
+    delBtn.addEventListener("click", () => {
+      const doc = currentDoc();
+      if (!doc) return;
+      doc.tasks = doc.tasks.filter((t) => t.id !== task.id);
+      saveDocs();
+      renderTasks();
+    });
+
+    return row;
+  }
+
+  function buildChildRow(parent, child) {
+    const row = document.createElement("div");
+    row.className = "task-child-row";
+
+    const text = document.createElement("input");
+    text.type = "text";
+    text.className = "task-child-text";
+    text.value = child.text || "";
+    text.placeholder = "Sub-task…";
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "task-action-btn danger small";
+    delBtn.title = "Delete sub-task";
+    delBtn.textContent = "×";
+
+    row.appendChild(text);
+    row.appendChild(delBtn);
+
+    text.addEventListener("input", () => {
+      child.text = text.value;
+      saveDocs();
+    });
+
+    delBtn.addEventListener("click", () => {
+      parent.children = parent.children.filter((c) => c.id !== child.id);
+      if (!parent.children.length) parent.expanded = false;
+      saveDocs();
+      renderTasks();
+    });
+
+    return row;
+  }
+
+  function addTask() {
+    const doc = currentDoc();
+    if (!doc) return;
+    if (!doc.tasks) doc.tasks = [];
+    doc.tasks.push({ id: uid(), text: "", expanded: false, children: [] });
+    saveDocs();
+    renderTasks();
+    const rows = document.querySelectorAll(".task-row-header .task-text");
+    if (rows.length) rows[rows.length - 1].focus();
   }
 
   function autoGrow(el) {
@@ -230,6 +373,7 @@
       id: uid(),
       title: "Untitled Document",
       body: "",
+      tasks: [],
       stories: [],
       projectId: "",
       createdAt: new Date().toISOString(),
@@ -365,6 +509,7 @@
 
     document.getElementById("newDocBtn").addEventListener("click", createDoc);
     document.getElementById("addStoryBtn").addEventListener("click", addStory);
+    document.getElementById("addTaskBtn").addEventListener("click", addTask);
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
 
     const prose = document.getElementById("docProse");
