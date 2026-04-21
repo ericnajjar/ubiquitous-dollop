@@ -328,6 +328,8 @@ a { color: inherit; text-decoration: none; }
 }
 .task-children[hidden] { display: none; }
 
+.task-child-wrap { display: flex; flex-direction: column; }
+
 .task-child-row {
   display: flex; align-items: center; gap: 5px;
   padding: 3px 6px;
@@ -339,6 +341,84 @@ a { color: inherit; text-decoration: none; }
 .task-child-row.dragging { opacity: .4; }
 .task-child-row.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
 .task-child-row.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* Column chips in tasks header */
+.tasks-col-chips { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
+.tasks-col-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: 5px;
+  background: rgba(110,168,255,.08); border: 1px solid rgba(110,168,255,.2);
+  color: var(--accent); font-size: 11px; font-weight: 600;
+}
+.tasks-col-chip-del {
+  border: none; background: transparent; color: var(--accent);
+  cursor: pointer; font-size: 14px; padding: 0; line-height: 1;
+  opacity: .55; transition: opacity .15s;
+}
+.tasks-col-chip-del:hover { opacity: 1; }
+
+/* Column value fields inside task/child rows */
+.task-col-values {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 0 10px 10px 62px;
+}
+.task-child-col-values { padding: 2px 6px 6px 27px; }
+.task-col-field { display: flex; flex-direction: column; gap: 3px; min-width: 80px; max-width: 160px; }
+.task-col-label-row { display: flex; align-items: center; gap: 3px; }
+.task-col-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted);
+}
+.task-col-del {
+  width: 14px; height: 14px; border: none; background: transparent;
+  color: var(--muted); cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 3px; padding: 0; line-height: 1; opacity: .55;
+  transition: opacity .15s, color .15s;
+}
+.task-col-del:hover { opacity: 1; color: var(--danger); }
+.task-col-input {
+  font: inherit; font-size: 12px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 5px; padding: 3px 7px; outline: none; width: 100%;
+  transition: border-color .2s;
+}
+.task-col-input:focus { border-color: var(--accent); }
+.task-col-input::placeholder { color: rgba(154,164,199,.4); }
+
+/* Add-column popup */
+.add-col-popup {
+  position: fixed; z-index: 200; width: 256px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.5);
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.acp-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.acp-field { display: flex; flex-direction: column; gap: 4px; }
+.acp-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.acp-input {
+  font: inherit; font-size: 13px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 7px; padding: 6px 10px; outline: none;
+  transition: border-color .2s;
+}
+.acp-input:focus { border-color: var(--accent); }
+.acp-input::placeholder { color: var(--muted); }
+.acp-scope { display: flex; flex-direction: column; gap: 4px; }
+.acp-scope-options { display: flex; flex-direction: column; gap: 5px; }
+.acp-scope-option {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text); cursor: pointer;
+}
+.acp-scope-option input[type="radio"] { cursor: pointer; accent-color: var(--accent); }
+.acp-select {
+  font: inherit; font-size: 12px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 8px; cursor: pointer; outline: none;
+  transition: border-color .2s;
+}
+.acp-select:focus { border-color: var(--accent); }
+.acp-add-btn { width: 100%; margin-top: 2px; }
 
 .task-child-text {
   flex: 1; font: inherit; font-size: 13px;

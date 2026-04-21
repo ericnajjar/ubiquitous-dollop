@@ -126,15 +126,217 @@
       .forEach((el) => el.classList.remove("drop-above", "drop-below"));
   }
 
+  function buildColField(item, col, onDelete) {
+    const field = document.createElement("div");
+    field.className = "task-col-field";
+    const labelRow = document.createElement("div");
+    labelRow.className = "task-col-label-row";
+    const label = document.createElement("span");
+    label.className = "task-col-label";
+    label.textContent = col.name;
+    labelRow.appendChild(label);
+    if (onDelete) {
+      const del = document.createElement("button");
+      del.className = "task-col-del";
+      del.textContent = "×";
+      del.title = "Remove column";
+      del.addEventListener("click", (e) => { e.stopPropagation(); onDelete(); });
+      labelRow.appendChild(del);
+    }
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "task-col-input";
+    input.value = (item.colValues || {})[col.id] || "";
+    input.placeholder = "—";
+    input.addEventListener("input", () => {
+      if (!item.colValues) item.colValues = {};
+      item.colValues[col.id] = input.value;
+      saveDocs();
+    });
+    field.appendChild(labelRow);
+    field.appendChild(input);
+    return field;
+  }
+
+  function deleteGlobalColumn(colId) {
+    const doc = currentDoc();
+    if (!doc) return;
+    doc.taskColumns = (doc.taskColumns || []).filter((c) => c.id !== colId);
+    (doc.tasks || []).forEach((task) => {
+      if (task.colValues) delete task.colValues[colId];
+      (task.children || []).forEach((child) => {
+        if (child.colValues) delete child.colValues[colId];
+      });
+    });
+    saveDocs();
+    renderTasks();
+  }
+
+  function deleteLocalColumn(task, colId) {
+    task.localColumns = (task.localColumns || []).filter((c) => c.id !== colId);
+    if (task.colValues) delete task.colValues[colId];
+    (task.children || []).forEach((child) => {
+      if (child.colValues) delete child.colValues[colId];
+    });
+    saveDocs();
+    renderTasks();
+  }
+
+  function showAddColumnPopup(anchor, defaultScope, relatedTaskId) {
+    document.querySelector(".add-col-popup")?.remove();
+    const doc = currentDoc();
+    if (!doc) return;
+
+    const popup = document.createElement("div");
+    popup.className = "add-col-popup";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "acp-title";
+    titleEl.textContent = "New Column";
+    popup.appendChild(titleEl);
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "acp-field";
+    const nameLbl = document.createElement("label");
+    nameLbl.className = "acp-label";
+    nameLbl.textContent = "Name";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "acp-input";
+    nameInput.placeholder = "e.g. Status, Owner, Sprint…";
+    nameWrap.appendChild(nameLbl);
+    nameWrap.appendChild(nameInput);
+    popup.appendChild(nameWrap);
+
+    const scopeWrap = document.createElement("div");
+    scopeWrap.className = "acp-scope";
+    const scopeLbl = document.createElement("div");
+    scopeLbl.className = "acp-label";
+    scopeLbl.textContent = "Scope";
+    const scopeOpts = document.createElement("div");
+    scopeOpts.className = "acp-scope-options";
+    ["global", "local"].forEach((s) => {
+      const lbl = document.createElement("label");
+      lbl.className = "acp-scope-option";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "acp-scope-radio";
+      radio.value = s;
+      radio.checked = s === defaultScope;
+      const txt = document.createElement("span");
+      txt.textContent = s === "global" ? "Global — all tasks" : "Local — one task only";
+      lbl.appendChild(radio);
+      lbl.appendChild(txt);
+      scopeOpts.appendChild(lbl);
+    });
+    scopeWrap.appendChild(scopeLbl);
+    scopeWrap.appendChild(scopeOpts);
+    popup.appendChild(scopeWrap);
+
+    let taskSelWrap = null;
+    if (relatedTaskId === null) {
+      taskSelWrap = document.createElement("div");
+      taskSelWrap.className = "acp-field";
+      taskSelWrap.hidden = defaultScope === "global";
+      const taskSelLbl = document.createElement("label");
+      taskSelLbl.className = "acp-label";
+      taskSelLbl.textContent = "Apply to task";
+      const taskSel = document.createElement("select");
+      taskSel.className = "acp-select";
+      taskSel.id = "acp-task-sel";
+      if (doc.tasks && doc.tasks.length) {
+        doc.tasks.forEach((t) => {
+          const opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = t.text || "Untitled task";
+          taskSel.appendChild(opt);
+        });
+      } else {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No tasks yet";
+        taskSel.appendChild(opt);
+      }
+      taskSelWrap.appendChild(taskSelLbl);
+      taskSelWrap.appendChild(taskSel);
+      popup.appendChild(taskSelWrap);
+
+      scopeOpts.querySelectorAll("input[type='radio']").forEach((r) => {
+        r.addEventListener("change", () => {
+          const sel = popup.querySelector("input[name='acp-scope-radio']:checked")?.value;
+          taskSelWrap.hidden = sel !== "local";
+        });
+      });
+    }
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "btn btn-primary btn-sm acp-add-btn";
+    addBtn.textContent = "Add Column";
+    addBtn.addEventListener("click", () => {
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      const scope = popup.querySelector("input[name='acp-scope-radio']:checked")?.value || "global";
+      if (scope === "global") {
+        if (!doc.taskColumns) doc.taskColumns = [];
+        doc.taskColumns.push({ id: uid(), name });
+      } else {
+        const taskId = relatedTaskId !== null ? relatedTaskId : (popup.querySelector("#acp-task-sel")?.value || null);
+        if (!taskId) return;
+        const task = (doc.tasks || []).find((t) => t.id === taskId);
+        if (!task) return;
+        if (!task.localColumns) task.localColumns = [];
+        task.localColumns.push({ id: uid(), name });
+      }
+      saveDocs();
+      renderTasks();
+      popup.remove();
+      document.removeEventListener("click", dismiss, true);
+    });
+    popup.appendChild(addBtn);
+
+    document.body.appendChild(popup);
+    const rect = anchor.getBoundingClientRect();
+    popup.style.top = (rect.bottom + 6) + "px";
+    popup.style.left = Math.max(10, Math.min(rect.left, window.innerWidth - 270)) + "px";
+
+    function dismiss(e) {
+      if (!popup.contains(e.target) && e.target !== anchor) {
+        popup.remove();
+        document.removeEventListener("click", dismiss, true);
+      }
+    }
+    setTimeout(() => { document.addEventListener("click", dismiss, true); nameInput.focus(); }, 0);
+  }
+
   function renderTasks() {
     const doc = currentDoc();
     const area = document.getElementById("tasksArea");
     const list = document.getElementById("tasksList");
+    const colChips = document.getElementById("tasksColChips");
     if (!doc) { area.hidden = true; return; }
 
     if (!doc.tasks) doc.tasks = [];
+    if (!doc.taskColumns) doc.taskColumns = [];
     area.hidden = false;
     list.innerHTML = "";
+
+    if (colChips) {
+      colChips.innerHTML = "";
+      doc.taskColumns.forEach((col) => {
+        const chip = document.createElement("span");
+        chip.className = "tasks-col-chip";
+        const name = document.createElement("span");
+        name.textContent = col.name;
+        const del = document.createElement("button");
+        del.className = "tasks-col-chip-del";
+        del.textContent = "×";
+        del.title = "Remove global column";
+        del.addEventListener("click", (e) => { e.stopPropagation(); deleteGlobalColumn(col.id); });
+        chip.appendChild(name);
+        chip.appendChild(del);
+        colChips.appendChild(chip);
+      });
+    }
 
     doc.tasks.forEach((task) => {
       list.appendChild(buildTaskRow(task));
@@ -184,6 +386,11 @@
     addChildBtn.title = "Add sub-task";
     addChildBtn.textContent = "+";
 
+    const addLocalColBtn = document.createElement("button");
+    addLocalColBtn.className = "task-action-btn";
+    addLocalColBtn.title = "Add local column (this task only)";
+    addLocalColBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><rect x="1" y="2" width="4" height="12" rx="1" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M9 8h4M11 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+
     const delBtn = document.createElement("button");
     delBtn.className = "task-action-btn danger";
     delBtn.title = "Delete task";
@@ -195,8 +402,21 @@
     header.appendChild(chipWrap);
     header.appendChild(linkBtn);
     header.appendChild(addChildBtn);
+    header.appendChild(addLocalColBtn);
     header.appendChild(delBtn);
     row.appendChild(header);
+
+    // Column value fields
+    const docRef = currentDoc();
+    const globalCols = (docRef && docRef.taskColumns) || [];
+    const localCols = task.localColumns || [];
+    if (globalCols.length || localCols.length) {
+      const colValues = document.createElement("div");
+      colValues.className = "task-col-values";
+      globalCols.forEach((col) => colValues.appendChild(buildColField(task, col, null)));
+      localCols.forEach((col) => colValues.appendChild(buildColField(task, col, () => deleteLocalColumn(task, col.id))));
+      row.appendChild(colValues);
+    }
 
     const children = document.createElement("div");
     children.className = "task-children";
@@ -260,7 +480,7 @@
       e.preventDefault();
       const doc = currentDoc();
       if (!doc) return;
-      const newTask = { id: uid(), text: "", expanded: false, children: [], linkedCard: null };
+      const newTask = { id: uid(), text: "", expanded: false, children: [], linkedCard: null, localColumns: [], colValues: {} };
       const idx = doc.tasks.findIndex((t) => t.id === task.id);
       doc.tasks.splice(idx + 1, 0, newTask);
       saveDocs();
@@ -274,9 +494,14 @@
       showCardPicker(linkBtn, (card) => { task.linkedCard = card; saveDocs(); renderTasks(); });
     });
 
+    addLocalColBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showAddColumnPopup(addLocalColBtn, "local", task.id);
+    });
+
     addChildBtn.addEventListener("click", () => {
       if (!task.children) task.children = [];
-      task.children.push({ id: uid(), text: "", linkedCard: null });
+      task.children.push({ id: uid(), text: "", linkedCard: null, colValues: {} });
       task.expanded = true;
       saveDocs();
       renderTasks();
@@ -296,6 +521,9 @@
   }
 
   function buildChildRow(parent, child) {
+    const wrap = document.createElement("div");
+    wrap.className = "task-child-wrap";
+
     const row = document.createElement("div");
     row.className = "task-child-row";
     row.draggable = true;
@@ -333,6 +561,7 @@
     row.appendChild(chipWrap);
     row.appendChild(linkBtn);
     row.appendChild(delBtn);
+    wrap.appendChild(row);
 
     // Child drag events
     row.addEventListener("dragstart", (e) => {
@@ -377,7 +606,7 @@
       if (e.key !== "Enter") return;
       e.preventDefault();
       if (!parent.children) parent.children = [];
-      const newChild = { id: uid(), text: "", linkedCard: null };
+      const newChild = { id: uid(), text: "", linkedCard: null, colValues: {} };
       const idx = parent.children.findIndex((c) => c.id === child.id);
       parent.children.splice(idx + 1, 0, newChild);
       saveDocs();
@@ -398,7 +627,19 @@
       renderTasks();
     });
 
-    return row;
+    // Column value fields (global + parent local)
+    const docRef = currentDoc();
+    const globalCols = (docRef && docRef.taskColumns) || [];
+    const localCols = parent.localColumns || [];
+    if (globalCols.length || localCols.length) {
+      const colValues = document.createElement("div");
+      colValues.className = "task-col-values task-child-col-values";
+      globalCols.forEach((col) => colValues.appendChild(buildColField(child, col, null)));
+      localCols.forEach((col) => colValues.appendChild(buildColField(child, col, null)));
+      wrap.appendChild(colValues);
+    }
+
+    return wrap;
   }
 
   function buildCardChip(card, onUnlink) {
@@ -544,7 +785,7 @@
     const doc = currentDoc();
     if (!doc) return;
     if (!doc.tasks) doc.tasks = [];
-    doc.tasks.push({ id: uid(), text: "", expanded: false, children: [] });
+    doc.tasks.push({ id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} });
     saveDocs();
     renderTasks();
     const rows = document.querySelectorAll(".task-row-header .task-text");
@@ -810,6 +1051,10 @@
     document.getElementById("addStoryBtn").addEventListener("click", addStory);
     document.getElementById("addTaskBtn").addEventListener("click", addTask);
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
+    document.getElementById("addColBtn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      showAddColumnPopup(document.getElementById("addColBtn"), "global", null);
+    });
 
     const prose = document.getElementById("docProse");
     prose.addEventListener("input", () => {
