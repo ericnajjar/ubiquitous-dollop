@@ -5,6 +5,7 @@
   const SLIDES_KEY = "datascope_slides";
   const KANBAN_KEY = "datascope_kanban";
   const NOTES_KEY = "datascope_notes";
+  const DOCS_KEY = "datascope_docs";
 
   function uid() {
     return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -74,6 +75,11 @@
     return notes.filter((n) => n.projectId === projectId);
   }
 
+  function getLinkedDocs(projectId) {
+    const docs = loadStore(DOCS_KEY) || [];
+    return docs.filter((d) => d.projectId === projectId);
+  }
+
   // ---------- Unlink helpers ----------
   function unlinkChart(chartId) {
     const charts = loadStore(CHARTS_KEY) || [];
@@ -114,6 +120,15 @@
     }
   }
 
+  function unlinkDoc(docId) {
+    const docs = loadStore(DOCS_KEY) || [];
+    const doc = docs.find((d) => d.id === docId);
+    if (doc) {
+      doc.projectId = "";
+      saveStore(DOCS_KEY, docs);
+    }
+  }
+
   // ---------- Render ----------
   function render() {
     const grid = document.getElementById("projectsGrid");
@@ -139,6 +154,7 @@
     const decks = getLinkedDecks(proj.id);
     const cards = getLinkedCards(proj.id);
     const notes = getLinkedNotes(proj.id);
+    const docs = getLinkedDocs(proj.id);
 
     const name = document.createElement("h3");
     name.className = "project-card-name";
@@ -159,8 +175,9 @@
     if (decks.length) addBadge(stats, `${decks.length} deck${decks.length > 1 ? "s" : ""}`, "purple");
     if (cards.length) addBadge(stats, `${cards.length} card${cards.length > 1 ? "s" : ""}`, "green");
     if (notes.length) addBadge(stats, `${notes.length} note${notes.length > 1 ? "s" : ""}`, "pink");
+    if (docs.length) addBadge(stats, `${docs.length} doc${docs.length > 1 ? "s" : ""}`, "orange");
 
-    if (!charts.length && !decks.length && !cards.length && !notes.length) {
+    if (!charts.length && !decks.length && !cards.length && !notes.length && !docs.length) {
       addBadge(stats, "No items yet", "");
     }
 
@@ -237,6 +254,7 @@
     getLinkedDecks(state.editingId).forEach((d) => unlinkDeck(d.id));
     getLinkedCards(state.editingId).forEach((c) => unlinkCard(c.id));
     getLinkedNotes(state.editingId).forEach((n) => unlinkNote(n.id));
+    getLinkedDocs(state.editingId).forEach((d) => unlinkDoc(d.id));
 
     state.projects = state.projects.filter((p) => p.id !== state.editingId);
     saveProjects();
@@ -249,6 +267,7 @@
     renderLinkedSection("linkedDecks", projectId ? getLinkedDecks(projectId) : [], (d) => d.name, () => "Slide deck", (d) => { unlinkDeck(d.id); renderLinkedItems(projectId); render(); });
     renderLinkedSection("linkedCards", projectId ? getLinkedCards(projectId) : [], (c) => c.title, (c) => c.columnName || "", (c) => { unlinkCard(c.id); renderLinkedItems(projectId); render(); });
     renderLinkedSection("linkedNotes", projectId ? getLinkedNotes(projectId) : [], (n) => n.title || n.body?.slice(0, 40) || "Untitled", () => "Note", (n) => { unlinkNote(n.id); renderLinkedItems(projectId); render(); });
+    renderLinkedSection("linkedDocs", projectId ? getLinkedDocs(projectId) : [], (d) => d.title || "Untitled", (d) => `${d.stories?.length || 0} stor${(d.stories?.length || 0) !== 1 ? "ies" : "y"}`, (d) => { unlinkDoc(d.id); renderLinkedItems(projectId); render(); });
   }
 
   function renderLinkedSection(containerId, items, nameGetter, metaGetter, onUnlink) {
