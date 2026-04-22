@@ -28,8 +28,8 @@
   local-only mode — no login required, data stays in the browser.
 */
 
-const DATASCOPE_SUPABASE_URL = 'YOUR_SUPABASE_URL';
-const DATASCOPE_SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const DATASCOPE_SUPABASE_URL = 'https://xxxapdisqabtideefkez.supabase.co';
+const DATASCOPE_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh4eGFwZGlzcWFidGlkZWVma2V6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NTk2NzEsImV4cCI6MjA5MjQzNTY3MX0.mNy8bSI7MZT0Z3g3cABzioSsiWJt90vsxXediYa9_Uo';
 
 window.datascope = window.datascope || {};
 
