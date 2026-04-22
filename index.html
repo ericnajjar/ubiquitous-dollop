@@ -3,27 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DataScope — Visualize your data</title>
+  <title>DataScope</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
   <script src="cloud-sync.js"></script>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="home.css" />
+  <script src="home.js" defer></script>
   <link rel="stylesheet" href="mascot.css" />
   <script src="mascot.js" defer></script>
 </head>
 <body>
   <header class="site-header">
-    <div class="container header-inner">
-      <a class="brand" href="#top">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
         <span class="brand-mark" aria-hidden="true"></span>
         <span class="brand-text">DataScope</span>
       </a>
       <nav class="site-nav">
-        <a href="#showcase">Charts</a>
+        <a href="charts.html">Charts</a>
         <a href="slides.html">Slides</a>
         <a href="kanban.html">Board</a>
         <a href="notes.html">Notes</a>
@@ -34,208 +32,35 @@
     </div>
   </header>
 
-  <main id="top">
-    <!-- Section 1: What you can do -->
-    <section id="showcase" class="section">
-      <div class="container">
-        <header class="section-header centered">
-          <p class="eyebrow">Visualize your data</p>
-          <h1>Turn numbers into charts you can read at a glance.</h1>
-          <p class="lede">
-            Pick a chart type, bring your own data (or edit it right in the
-            browser), and customize the colors. No spreadsheets, no code, no
-            server — everything runs locally.
-          </p>
-          <div class="hero-actions">
-            <a href="#explorer" class="btn btn-primary">Open the explorer</a>
-          </div>
-        </header>
-
-        <div class="examples-grid">
-          <article class="example-card">
-            <div class="chart-wrap"><canvas id="exampleBar"></canvas></div>
-            <h3>Compare categories</h3>
-            <p>Bar charts make it easy to spot the biggest and smallest values at a glance.</p>
-          </article>
-          <article class="example-card">
-            <div class="chart-wrap"><canvas id="exampleLine"></canvas></div>
-            <h3>Track trends over time</h3>
-            <p>Line charts highlight direction and momentum across a series of points.</p>
-          </article>
-          <article class="example-card">
-            <div class="chart-wrap"><canvas id="exampleDoughnut"></canvas></div>
-            <h3>Show composition</h3>
-            <p>Doughnut charts answer "what share of the whole?" for a handful of groups.</p>
-          </article>
-        </div>
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <h1>Welcome to DataScope</h1>
+        <p class="hero-sub">Your all-in-one workspace for data visualization, project management, and documentation — all saved to your account.</p>
       </div>
     </section>
 
-    <!-- Section 2: Data explorer -->
-    <section id="explorer" class="section section-alt">
-      <div class="container">
-        <header class="section-header">
-          <h2>Data explorer</h2>
-          <p>
-            Edit the table below, upload a CSV, or load the sample dataset —
-            the chart updates live.
-          </p>
-        </header>
-
-        <div class="explorer">
-          <!-- Chart + controls -->
-          <div class="explorer-chart chart-card">
-            <div class="chart-toolbar">
-              <h3 id="explorerTitle">Chart</h3>
-              <div class="toolbar-controls">
-                <label>
-                  Type
-                  <select id="chartTypeSelect">
-                    <optgroup label="Bar">
-                      <option value="bar">Vertical bar</option>
-                      <option value="bar-horizontal">Horizontal bar</option>
-                    </optgroup>
-                    <optgroup label="Line">
-                      <option value="line">Smooth line</option>
-                      <option value="line-straight">Straight line</option>
-                      <option value="line-stepped">Stepped line</option>
-                      <option value="area">Area</option>
-                    </optgroup>
-                    <optgroup label="Circular">
-                      <option value="doughnut">Doughnut</option>
-                      <option value="pie">Pie</option>
-                      <option value="polarArea">Polar area</option>
-                    </optgroup>
-                    <optgroup label="Other">
-                      <option value="radar">Radar</option>
-                      <option value="scatter">Scatter plot</option>
-                    </optgroup>
-                  </select>
-                </label>
-                <label class="inline-toggle" id="stackToggleWrap" hidden>
-                  <input type="checkbox" id="stackToggle" />
-                  Stack
-                </label>
-                <button type="button" class="btn btn-ghost btn-sm" id="exportPngBtn">
-                  Export PNG
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="exportSvgBtn">
-                  Export SVG
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="sendToSlidesBtn">
-                  Send to Slides
-                </button>
-              </div>
-            </div>
-            <div class="chart-save-bar">
-              <input type="text" id="chartName" placeholder="Chart name…" autocomplete="off" class="chart-name-input" />
-              <select id="chartProjectSelect" class="saved-charts-select">
-                <option value="">No project</option>
-              </select>
-              <button type="button" class="btn btn-ghost btn-sm" id="saveChartBtn">Save</button>
-              <select id="savedChartsSelect" class="saved-charts-select">
-                <option value="">Load saved chart…</option>
-              </select>
-              <button type="button" class="btn btn-ghost btn-sm danger" id="deleteSavedChartBtn">Delete</button>
-            </div>
-            <div class="chart-wrap large"><canvas id="explorerChart"></canvas></div>
-
-            <div class="control-row">
-              <div class="field field-wide">
-                <label for="yAxisPills">Values (Y axes — click to toggle)</label>
-                <div id="yAxisPills" class="pills" role="group" aria-label="Select Y-axis columns"></div>
-              </div>
-              <div class="field">
-                <label for="xAxisSelect">Labels (X axis)</label>
-                <select id="xAxisSelect"></select>
-              </div>
-              <div class="field">
-                <label for="fontFamilySelect">Font</label>
-                <select id="fontFamilySelect">
-                  <option value='system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'>System</option>
-                  <option value='"Helvetica Neue", Arial, sans-serif'>Sans-serif</option>
-                  <option value='Georgia, "Times New Roman", serif'>Serif</option>
-                  <option value='Menlo, Consolas, "Courier New", monospace'>Monospace</option>
-                  <option value='"Comic Sans MS", "Chalkboard SE", cursive'>Casual</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="fontSizeSelect">Font size</label>
-                <select id="fontSizeSelect">
-                  <option value="11">Small</option>
-                  <option value="13" selected>Medium</option>
-                  <option value="16">Large</option>
-                  <option value="20">Extra large</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="color-picker" id="colorPicker">
-              <span class="color-picker-label">Colors</span>
-              <div class="color-swatches" id="colorSwatches"></div>
-              <button type="button" class="btn btn-ghost btn-sm" id="resetColorsBtn">
-                Reset palette
-              </button>
-            </div>
-          </div>
-
-          <!-- Editable data grid -->
-          <div class="data-editor chart-card">
-            <div class="chart-toolbar">
-              <h3>Your data</h3>
-              <div class="toolbar-controls">
-                <label class="file-btn">
-                  <input type="file" id="csvInput" accept=".csv,text/csv" />
-                  Upload CSV
-                </label>
-                <button type="button" class="btn btn-ghost btn-sm" id="loadSampleBtn">
-                  Load sample
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="clearDataBtn">
-                  Clear
-                </button>
-                <button type="button" class="btn btn-ghost btn-sm" id="flipDataBtn" title="Transpose rows and columns">
-                  ↕ Flip
-                </button>
-              </div>
-            </div>
-
-            <div class="table-wrap">
-              <table id="editorTable"></table>
-            </div>
-
-            <div class="editor-actions">
-              <button type="button" class="btn btn-ghost btn-sm" id="addRowBtn">
-                + Add row
-              </button>
-              <button type="button" class="btn btn-ghost btn-sm" id="addColBtn">
-                + Add column
-              </button>
-              <p class="chart-hint" id="editorHint">
-                Click any cell to edit. Numbers are detected automatically.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <section class="tools-section">
+      <h2>Your Tools</h2>
+      <div class="tools-grid" id="toolsGrid"></div>
     </section>
 
-    <!-- Section 3: Chart library -->
-    <section id="library" class="section section-alt">
-      <div class="container">
-        <header class="section-header">
-          <h2>Saved charts</h2>
-          <p>Click any tile to load a chart back into the explorer.</p>
-        </header>
-        <div class="chart-library" id="chartLibrary"></div>
-        <p class="library-empty" id="libraryEmpty" hidden>No saved charts yet — name a chart above and click Save.</p>
+    <section class="projects-section">
+      <div class="projects-header">
+        <h2>Your Projects</h2>
+        <a href="projects.html" class="btn btn-ghost btn-sm">View all &rarr;</a>
+      </div>
+      <div class="home-projects-grid" id="homeProjectsGrid"></div>
+      <div class="projects-empty" id="homeProjectsEmpty" hidden>
+        <p>No projects yet.</p>
+        <p>Projects let you group charts, slides, notes, and more. <a href="projects.html">Create your first project &rarr;</a></p>
       </div>
     </section>
   </main>
 
   <footer class="site-footer">
-    <div class="container footer-inner">
-      <p>&copy; <span id="year"></span> DataScope. Built with Chart.js.</p>
+    <div class="footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Saved to your account.</p>
     </div>
   </footer>
 </body>

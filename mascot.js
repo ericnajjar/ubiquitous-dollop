@@ -119,7 +119,7 @@
   // ---------- Tool definitions ----------
   const TOOLS = {
     charts: {
-      name: "Charts", url: "index.html",
+      name: "Charts", url: "charts.html",
       keywords: ["chart", "graph", "data", "visuali", "bar", "line", "pie", "doughnut", "scatter", "plot", "csv", "number", "trend", "compare", "analytics", "metric"],
       description: "Create interactive charts from your data — bar, line, pie, scatter, and more.", emoji: "📊",
     },
@@ -372,7 +372,7 @@
     return `You are a friendly, knowledgeable assistant built into DataScope, a browser-based productivity platform. Help the user with their work on the current page and across the app.
 
 DataScope tools:
-- Charts (index.html): data visualizations from CSV
+- Charts (charts.html): data visualizations from CSV
 - Slides (slides.html): presentation decks with templates + AI generation
 - Board (kanban.html): Kanban + Gantt with AI card generation from documents
 - Notes (notes.html): sticky notes with tags
