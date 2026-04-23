@@ -436,6 +436,26 @@
       if (i === state.currentProject) opt.selected = true;
       sel.appendChild(opt);
     });
+
+    const moveWrap = document.getElementById("deckMoveWrap");
+    if (moveWrap) {
+      moveWrap.innerHTML = "";
+      const ds = window.datascope;
+      const proj = state.projects[state.currentProject];
+      if (ds?.userTeams?.length && proj) {
+        const lbl = document.createElement("label");
+        lbl.className = "team-move-label";
+        lbl.textContent = "Owner";
+        moveWrap.appendChild(lbl);
+        const moveSel = ds.buildTeamMoveSelect(proj.teamId || null);
+        moveSel.addEventListener("change", () => {
+          proj.teamId = moveSel.value || null;
+          saveState();
+          renderProjectSelect();
+        });
+        moveWrap.appendChild(moveSel);
+      }
+    }
   }
 
   function renderDeckLibrary() {

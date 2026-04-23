@@ -216,6 +216,17 @@
 
     renderLinkedItems(proj?.id);
 
+    const moveWrap = document.getElementById("projectMoveWrap");
+    moveWrap.innerHTML = "";
+    const ds = window.datascope;
+    if (ds?.userTeams?.length) {
+      const lbl = document.createElement("label");
+      lbl.className = "team-move-label";
+      lbl.textContent = "Owner";
+      moveWrap.appendChild(lbl);
+      moveWrap.appendChild(ds.buildTeamMoveSelect(proj?.teamId || null));
+    }
+
     document.getElementById("modalOverlay").hidden = false;
     document.getElementById("projectNameInput").focus();
   }
@@ -232,6 +243,8 @@
       return;
     }
     const description = document.getElementById("projectDescInput").value.trim();
+    const moveSel = document.querySelector("#projectMoveWrap .team-move-select");
+    const newTeamId = moveSel ? (moveSel.value || null) : (window.datascope?.activeTeamId || null);
     const now = new Date().toISOString();
 
     if (state.editingId) {
@@ -239,12 +252,13 @@
       if (proj) {
         proj.name = name;
         proj.description = description;
+        proj.teamId = newTeamId;
         proj.updatedAt = now;
       }
     } else {
       state.projects.push({
         id: uid(),
-        teamId: window.datascope?.activeTeamId || null,
+        teamId: newTeamId,
         name,
         description,
         createdAt: now,

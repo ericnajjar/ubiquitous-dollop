@@ -1074,6 +1074,25 @@
         renderChartLibrary();
       });
 
+      const ds = window.datascope;
+      if (ds?.userTeams?.length) {
+        const moveSel = ds.buildTeamMoveSelect(c.teamId || null);
+        moveSel.style.fontSize = "11px";
+        moveSel.style.padding = "3px 20px 3px 6px";
+        moveSel.addEventListener("click", (e) => e.stopPropagation());
+        moveSel.addEventListener("change", (e) => {
+          e.stopPropagation();
+          const all = loadSavedCharts();
+          const chart = all.find((ch) => ch.id === c.id);
+          if (chart) {
+            chart.teamId = moveSel.value || null;
+            persistSavedCharts(all);
+            renderSavedChartsSelect();
+            renderChartLibrary();
+          }
+        });
+        actions.appendChild(moveSel);
+      }
       actions.appendChild(loadBtn);
       actions.appendChild(delBtn);
       footer.appendChild(nameEl);

@@ -247,6 +247,24 @@
     } catch (_) {}
   };
 
+  ds.buildTeamMoveSelect = function (currentTeamId) {
+    const sel = document.createElement('select');
+    sel.className = 'team-move-select';
+    const personal = document.createElement('option');
+    personal.value = '';
+    personal.textContent = 'Personal';
+    if (!currentTeamId) personal.selected = true;
+    sel.appendChild(personal);
+    (ds.userTeams || []).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name;
+      if (t.id === currentTeamId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    return sel;
+  };
+
   ds.signOut = async function () {
     try { await sb.auth.signOut(); } catch (_) {}
     SYNC_KEYS.forEach(k => localStorage.removeItem(k));

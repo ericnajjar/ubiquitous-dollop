@@ -276,6 +276,17 @@
     populateProjectSelect(note?.projectId || "");
     renderColorPalette();
 
+    const moveWrap = document.getElementById("noteMoveWrap");
+    moveWrap.innerHTML = "";
+    const ds = window.datascope;
+    if (ds?.userTeams?.length) {
+      const lbl = document.createElement("label");
+      lbl.className = "team-move-label";
+      lbl.textContent = "Owner";
+      moveWrap.appendChild(lbl);
+      moveWrap.appendChild(ds.buildTeamMoveSelect(note?.teamId || null));
+    }
+
     document.getElementById("modalOverlay").hidden = false;
 
     // Set modal background to match note color.
@@ -297,6 +308,8 @@
       .split(",").map((t) => t.trim()).filter(Boolean);
     const dueDate = document.getElementById("noteDueInput").value || "";
     const projectId = document.getElementById("noteProjectSelect").value || "";
+    const moveSel = document.querySelector("#noteMoveWrap .team-move-select");
+    const newTeamId = moveSel ? (moveSel.value || null) : (window.datascope?.activeTeamId || null);
 
     if (!title && !body) { closeModal(); return; }
 
@@ -311,12 +324,13 @@
         note.dueDate = dueDate;
         note.projectId = projectId;
         note.colorIdx = state.editingColorIdx;
+        note.teamId = newTeamId;
         note.updatedAt = now;
       }
     } else {
       state.notes.unshift({
         id: uid(),
-        teamId: window.datascope?.activeTeamId || null,
+        teamId: newTeamId,
         title,
         body,
         tags,

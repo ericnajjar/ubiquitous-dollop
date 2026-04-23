@@ -197,6 +197,26 @@
     addBtn.title = "New canvas";
     addBtn.addEventListener("click", () => createCanvas());
     bar.appendChild(addBtn);
+
+    const ds = window.datascope;
+    const active = canvases.find(cv => cv.id === currentId);
+    if (ds?.userTeams?.length && active) {
+      const wrap = document.createElement("div");
+      wrap.className = "team-move-wrap";
+      wrap.style.cssText = "margin-left:auto;padding-right:8px";
+      const lbl = document.createElement("label");
+      lbl.className = "team-move-label";
+      lbl.textContent = "Owner";
+      wrap.appendChild(lbl);
+      const moveSel = ds.buildTeamMoveSelect(active.teamId || null);
+      moveSel.addEventListener("change", () => {
+        active.teamId = moveSel.value || null;
+        save();
+        buildCanvasBar();
+      });
+      wrap.appendChild(moveSel);
+      bar.appendChild(wrap);
+    }
   }
 
   // ---------- Coordinate transforms ----------

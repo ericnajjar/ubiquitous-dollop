@@ -14,6 +14,22 @@
 .team-context-select:focus { border-color: #6ea8ff; box-shadow: 0 0 0 2px rgba(110,168,255,.15); }
 .team-context-select option { background: #161d3d; color: #e7ecff; }
 
+/* Move-to select (in-modal) */
+.team-move-select {
+  font: inherit; font-size: 12px; font-weight: 500; color: #e7ecff;
+  background: #1a2240; border: 1px solid rgba(255,255,255,.08);
+  border-radius: 6px; padding: 5px 24px 5px 8px;
+  cursor: pointer; outline: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239aa4c7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 7px center;
+  transition: border-color .2s;
+  max-width: 140px; text-overflow: ellipsis;
+}
+.team-move-select:hover, .team-move-select:focus { border-color: #6ea8ff; }
+.team-move-select option { background: #161d3d; color: #e7ecff; }
+.team-move-label { font-size: 12px; color: #9aa4c7; font-weight: 600; }
+.team-move-wrap { display: flex; align-items: center; gap: 6px; }
+
 /* Account icon button */
 .account-icon-btn {
   width: 36px; height: 36px; border-radius: 50%;

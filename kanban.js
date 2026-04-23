@@ -1145,6 +1145,17 @@
 
     populateProjectSelect(card?.projectId || "");
 
+    const moveWrap = document.getElementById("cardMoveWrap");
+    moveWrap.innerHTML = "";
+    const ds = window.datascope;
+    if (ds?.userTeams?.length) {
+      const lbl = document.createElement("label");
+      lbl.className = "team-move-label";
+      lbl.textContent = "Board owner";
+      moveWrap.appendChild(lbl);
+      moveWrap.appendChild(ds.buildTeamMoveSelect(state.teamId || null));
+    }
+
     modalAttachments = JSON.parse(JSON.stringify(card?.attachments || { canvases: [], charts: [], decks: [] }));
     buildAttachSections();
 
@@ -1168,6 +1179,8 @@
     const reminderRaw = document.getElementById("cardReminder").value;
     const tags = document.getElementById("cardTags").value
       .split(",").map((t) => t.trim()).filter(Boolean);
+    const moveSel = document.querySelector("#cardMoveWrap .team-move-select");
+    const targetTeamId = moveSel ? (moveSel.value || null) : (state.teamId || null);
 
     const cardData = {
       title,
@@ -1181,28 +1194,47 @@
       attachments: JSON.parse(JSON.stringify(modalAttachments)),
     };
 
+    const movingToOtherBoard = (targetTeamId || null) !== (state.teamId || null);
+
     if (editingCardId) {
-      // Find and update, possibly moving to a different column.
-      let found = false;
+      let movedCard = null;
       state.columns.forEach((col) => {
         const idx = col.cards.findIndex((c) => c.id === editingCardId);
         if (idx !== -1) {
           const existing = col.cards[idx];
           col.cards[idx] = { ...existing, ...cardData };
-          found = true;
-          if (col.id !== targetColId) {
-            // Move to target column.
+          if (movingToOtherBoard) {
+            movedCard = col.cards.splice(idx, 1)[0];
+          } else if (col.id !== targetColId) {
             const [card] = col.cards.splice(idx, 1);
             const targetCol = state.columns.find((c) => c.id === targetColId);
             if (targetCol) targetCol.cards.push(card);
           }
         }
       });
-      if (!found) return; // shouldn't happen
+      if (movingToOtherBoard && movedCard) {
+        let destBoard = boards.find(b => (b.teamId || null) === targetTeamId);
+        if (!destBoard) {
+          destBoard = defaultBoard(targetTeamId);
+          boards.push(destBoard);
+        }
+        const destCol = destBoard.columns[0];
+        if (destCol) destCol.cards.push(movedCard);
+      }
     } else {
-      const targetCol = state.columns.find((c) => c.id === targetColId);
-      if (!targetCol) return;
-      targetCol.cards.push({ id: uid(), ...cardData, createdAt: new Date().toISOString() });
+      if (movingToOtherBoard) {
+        let destBoard = boards.find(b => (b.teamId || null) === targetTeamId);
+        if (!destBoard) {
+          destBoard = defaultBoard(targetTeamId);
+          boards.push(destBoard);
+        }
+        const destCol = destBoard.columns[0];
+        if (destCol) destCol.cards.push({ id: uid(), ...cardData, createdAt: new Date().toISOString() });
+      } else {
+        const targetCol = state.columns.find((c) => c.id === targetColId);
+        if (!targetCol) return;
+        targetCol.cards.push({ id: uid(), ...cardData, createdAt: new Date().toISOString() });
+      }
     }
 
     save();

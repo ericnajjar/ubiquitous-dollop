@@ -103,6 +103,24 @@
     addStoryBtn.hidden = false;
     populateProjectSelect(doc.projectId || "");
 
+    const moveWrap = document.getElementById("docMoveWrap");
+    moveWrap.innerHTML = "";
+    const ds = window.datascope;
+    if (ds?.userTeams?.length) {
+      const lbl = document.createElement("label");
+      lbl.className = "team-move-label";
+      lbl.textContent = "Owner";
+      moveWrap.appendChild(lbl);
+      const sel = ds.buildTeamMoveSelect(doc.teamId || null);
+      sel.addEventListener("change", () => {
+        doc.teamId = sel.value || null;
+        doc.updatedAt = new Date().toISOString();
+        saveDocs();
+        renderSidebar();
+      });
+      moveWrap.appendChild(sel);
+    }
+
     // Only update prose content on doc switch (avoid resetting cursor mid-type)
     if (prose.dataset.docId !== doc.id) {
       prose.innerHTML = bodyToHtml(doc.body);
