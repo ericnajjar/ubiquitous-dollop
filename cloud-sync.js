@@ -24,7 +24,7 @@
   const SYNC_KEYS = [
     'datascope_docs', 'datascope_projects', 'datascope_kanban',
     'datascope_slides', 'datascope_notes', 'datascope_canvas',
-    'datascope_saved_charts'
+    'datascope_saved_charts', 'datascope_profile'
   ];
 
   if (hasSession && !isAuthPage) {
@@ -54,33 +54,6 @@
       } catch (_) {}
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const nav = document.querySelector('.site-nav');
-      if (!nav) return;
-      try {
-        const { data: { session } } = await sb.auth.getSession();
-        if (!session) return;
-        const style = document.createElement('style');
-        style.textContent =
-          '.user-menu{display:flex;align-items:center;gap:10px;margin-left:16px}' +
-          '.user-email{font-size:12px;color:#9aa4c7;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-          '.user-logout{font:inherit;font-size:12px;color:#9aa4c7;background:transparent;border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:4px 10px;cursor:pointer;transition:color .2s,border-color .2s}' +
-          '.user-logout:hover{color:#e7ecff;border-color:#6ea8ff}';
-        document.head.appendChild(style);
-        const menu = document.createElement('div');
-        menu.className = 'user-menu';
-        const email = document.createElement('span');
-        email.className = 'user-email';
-        email.textContent = session.user.email;
-        const btn = document.createElement('button');
-        btn.className = 'user-logout';
-        btn.textContent = 'Sign out';
-        btn.addEventListener('click', () => ds.signOut());
-        menu.appendChild(email);
-        menu.appendChild(btn);
-        nav.parentElement.appendChild(menu);
-      } catch (_) {}
-    });
   }
 
   ds.pullFromCloud = async function () {
