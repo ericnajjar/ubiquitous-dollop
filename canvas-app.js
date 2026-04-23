@@ -16,6 +16,9 @@
     zoom: 1,
   };
 
+  let canvases = [];
+  let currentId = null;
+
   let dragging = false;
   let dragStart = { x: 0, y: 0 };
   let dragOffset = { x: 0, y: 0 };
@@ -35,22 +38,147 @@
   function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36); }
 
   // ---------- Persistence ----------
+  function syncFromState() {
+    const c = canvases.find(cv => cv.id === currentId);
+    if (c) { c.shapes = state.shapes; c.arrows = state.arrows; c.pan = state.pan; c.zoom = state.zoom; }
+  }
+
+  function syncToState(id) {
+    const c = canvases.find(cv => cv.id === id);
+    if (c) {
+      state.shapes = c.shapes || [];
+      state.arrows = c.arrows || [];
+      state.pan = c.pan || { x: 0, y: 0 };
+      state.zoom = c.zoom || 1;
+      state.selected = new Set();
+      currentId = id;
+    }
+  }
+
   function save() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ shapes: state.shapes, arrows: state.arrows, pan: state.pan, zoom: state.zoom }));
-    } catch (_) {}
+    syncFromState();
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(canvases)); } catch (_) {}
   }
 
   function load() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return;
+      if (!raw) {
+        const id = uid();
+        canvases = [{ id, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
+        currentId = id;
+        return;
+      }
       const data = JSON.parse(raw);
-      if (Array.isArray(data.shapes)) state.shapes = data.shapes;
-      if (Array.isArray(data.arrows)) state.arrows = data.arrows;
-      if (data.pan) state.pan = data.pan;
-      if (data.zoom) state.zoom = data.zoom;
-    } catch (_) {}
+      if (Array.isArray(data)) {
+        canvases = data;
+      } else if (data && typeof data === "object") {
+        const id = uid();
+        canvases = [{ id, name: "Untitled", shapes: data.shapes || [], arrows: data.arrows || [], pan: data.pan || { x: 0, y: 0 }, zoom: data.zoom || 1 }];
+      }
+      if (!canvases.length) {
+        const id = uid();
+        canvases = [{ id, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
+      }
+      syncToState(canvases[0].id);
+    } catch (_) {
+      const id = uid();
+      canvases = [{ id, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
+      currentId = id;
+    }
+  }
+
+  // ---------- Canvas management ----------
+  function createCanvas(name) {
+    syncFromState();
+    const id = uid();
+    canvases.push({ id, name: name || "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 });
+    syncToState(id);
+    updateZoomLabel();
+    save();
+    draw();
+    buildCanvasBar();
+  }
+
+  function switchCanvas(id) {
+    if (id === currentId) return;
+    syncFromState();
+    syncToState(id);
+    updateZoomLabel();
+    save();
+    draw();
+    buildCanvasBar();
+  }
+
+  function deleteCanvas(id) {
+    if (canvases.length <= 1) return;
+    const idx = canvases.findIndex(cv => cv.id === id);
+    canvases.splice(idx, 1);
+    if (currentId === id) {
+      syncToState(canvases[Math.min(idx, canvases.length - 1)].id);
+      updateZoomLabel();
+      draw();
+    }
+    save();
+    buildCanvasBar();
+  }
+
+  function renameCanvas(id, name) {
+    const c = canvases.find(cv => cv.id === id);
+    if (c) { c.name = name || "Untitled"; save(); buildCanvasBar(); }
+  }
+
+  function buildCanvasBar() {
+    const bar = document.getElementById("canvasBar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    canvases.forEach(c => {
+      const tab = document.createElement("button");
+      tab.className = "canvas-tab" + (c.id === currentId ? " active" : "");
+      tab.type = "button";
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "canvas-tab-name";
+      nameSpan.textContent = c.name;
+      tab.appendChild(nameSpan);
+      if (canvases.length > 1) {
+        const del = document.createElement("span");
+        del.className = "canvas-tab-del";
+        del.textContent = "×";
+        del.title = "Delete canvas";
+        del.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (confirm('Delete "' + c.name + '"?')) deleteCanvas(c.id);
+        });
+        tab.appendChild(del);
+      }
+      tab.addEventListener("click", () => switchCanvas(c.id));
+      tab.addEventListener("dblclick", (e) => {
+        e.stopPropagation();
+        const input = document.createElement("input");
+        input.className = "canvas-tab-rename";
+        input.value = c.name;
+        input.type = "text";
+        nameSpan.replaceWith(input);
+        input.focus();
+        input.select();
+        const finish = () => {
+          renameCanvas(c.id, input.value.trim() || "Untitled");
+        };
+        input.addEventListener("blur", finish);
+        input.addEventListener("keydown", (ke) => {
+          if (ke.key === "Enter") input.blur();
+          if (ke.key === "Escape") { input.value = c.name; input.blur(); }
+        });
+      });
+      bar.appendChild(tab);
+    });
+    const addBtn = document.createElement("button");
+    addBtn.className = "canvas-tab canvas-tab-add";
+    addBtn.type = "button";
+    addBtn.textContent = "+";
+    addBtn.title = "New canvas";
+    addBtn.addEventListener("click", () => createCanvas());
+    bar.appendChild(addBtn);
   }
 
   // ---------- Coordinate transforms ----------
@@ -777,6 +905,7 @@
   // ---------- Keyboard ----------
   function onKeyDown(e) {
     if (!document.getElementById("textEditor").hidden) return;
+    if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
 
     if (e.key === "Delete" || e.key === "Backspace") {
       deleteSelected();
@@ -869,6 +998,7 @@
 
     load();
     updateZoomLabel();
+    buildCanvasBar();
 
     // Toolbar
     document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
