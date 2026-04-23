@@ -1259,6 +1259,9 @@
     }
     if (e.key === "v" || e.key === "V") setTool("select");
     if (e.key === "s" || e.key === "S") setTool("shape");
+    if (e.key === "r" || e.key === "R") setCurrentShape("rect");
+    if (e.key === "c" || e.key === "C") setCurrentShape("circle");
+    if (e.key === "d" || e.key === "D") setCurrentShape("diamond");
     if (e.key === "t" || e.key === "T") setTool("text");
     if (e.key === "a" || e.key === "A") setTool("arrow");
     if (e.key === "h" || e.key === "H") setTool("hand");
@@ -1362,12 +1365,8 @@
     const shapeFlyout = document.getElementById("shapeFlyout");
     const shapeBtn = document.getElementById("shapeBtn");
     if (shapeBtn) {
-      shapeBtn.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        shapeFlyout.hidden = !shapeFlyout.hidden;
-      });
       shapeBtn.addEventListener("click", () => {
-        setTool("shape");
+        shapeFlyout.hidden = !shapeFlyout.hidden;
       });
     }
     document.querySelectorAll(".shape-flyout-btn").forEach(btn => {
@@ -1381,15 +1380,6 @@
         shapeFlyout.hidden = true;
       }
     });
-    const shapeWrap = document.getElementById("shapeToolWrap");
-    if (shapeWrap) {
-      let holdTimer = null;
-      shapeBtn.addEventListener("mousedown", () => {
-        holdTimer = setTimeout(() => { shapeFlyout.hidden = false; holdTimer = null; }, 400);
-      });
-      shapeBtn.addEventListener("mouseup", () => { if (holdTimer) clearTimeout(holdTimer); });
-      shapeBtn.addEventListener("mouseleave", () => { if (holdTimer) clearTimeout(holdTimer); });
-    }
 
     document.getElementById("fillColor").value = state.fillColor;
     document.getElementById("strokeColor").value = state.strokeColor;
