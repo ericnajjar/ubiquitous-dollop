@@ -72,10 +72,12 @@
         <div class="tool-field">
           <label>Fill</label>
           <input type="color" id="fillColor" value="#1d254a" />
+          <label class="tool-none-label"><input type="checkbox" id="fillNone" /> None</label>
         </div>
         <div class="tool-field">
           <label>Stroke</label>
           <input type="color" id="strokeColor" value="#6ea8ff" />
+          <label class="tool-none-label"><input type="checkbox" id="strokeNone" /> None</label>
         </div>
         <div class="tool-field">
           <label>Text</label>
@@ -88,6 +90,12 @@
       </div>
       <div class="tool-divider"></div>
       <div class="tool-group">
+        <button class="tool-btn" id="bringFwdBtn" title="Bring forward (])">
+          <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="7" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3" opacity="0.4"/><rect x="9" y="5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+        </button>
+        <button class="tool-btn" id="sendBackBtn" title="Send backward ([)">
+          <svg viewBox="0 0 20 20" fill="none"><rect x="9" y="5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3" opacity="0.4"/><rect x="3" y="7" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+        </button>
         <button class="tool-btn" id="deleteBtn" title="Delete (Del)">
           <svg viewBox="0 0 20 20" fill="none"><path d="M5 6 L15 6 L14 17 H6 Z" stroke="currentColor" stroke-width="1.3" fill="none"/><line x1="3" y1="6" x2="17" y2="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 3 H12 V6 H8 Z" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
         </button>

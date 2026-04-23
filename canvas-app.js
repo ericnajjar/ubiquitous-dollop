@@ -444,19 +444,21 @@
     });
 
     // Arrow preview while creating
-    if (state.tool === "arrow" && arrowStart && creating) {
-      const from = state.shapes.find((s) => s.id === arrowStart);
-      if (from) {
-        const fc = shapeCenter(from);
-        ctx.beginPath();
-        ctx.moveTo(fc.x, fc.y);
-        ctx.lineTo(creating.currentX, creating.currentY);
-        ctx.strokeStyle = "rgba(110, 168, 255, 0.5)";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
+    if (state.tool === "arrow" && creating) {
+      let sx, sy;
+      if (arrowStart) {
+        const from = state.shapes.find((s) => s.id === arrowStart);
+        if (from) { const fc = shapeCenter(from); sx = fc.x; sy = fc.y; }
       }
+      if (sx === undefined) { sx = creating.startX; sy = creating.startY; }
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(creating.currentX, creating.currentY);
+      ctx.strokeStyle = "rgba(110, 168, 255, 0.5)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
 
     // Shapes
@@ -517,20 +519,23 @@
 
   function drawShape(s, selected) {
     const sw = s.strokeWidth || 1.5;
-    ctx.fillStyle = s.fill || "#1d254a";
-    ctx.strokeStyle = selected ? "#fbbf24" : (s.stroke || "#6ea8ff");
+    const hasFill = s.fill && s.fill !== "transparent" && s.fill !== "none";
+    const hasStroke = s.stroke && s.stroke !== "transparent" && s.stroke !== "none";
+
+    if (hasFill) ctx.fillStyle = s.fill;
+    ctx.strokeStyle = selected ? "#fbbf24" : (hasStroke ? s.stroke : "transparent");
     ctx.lineWidth = selected ? sw + 1 : sw;
 
     if (s.type === "rect") {
       const r = 6;
       roundRect(s.x, s.y, s.w, s.h, r);
-      ctx.fill();
-      ctx.stroke();
+      if (hasFill) ctx.fill();
+      if (hasStroke || selected) ctx.stroke();
     } else if (s.type === "circle") {
       ctx.beginPath();
       ctx.ellipse(s.x + s.w / 2, s.y + s.h / 2, s.w / 2, s.h / 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      if (hasFill) ctx.fill();
+      if (hasStroke || selected) ctx.stroke();
     } else if (s.type === "diamond") {
       const cx = s.x + s.w / 2, cy = s.y + s.h / 2;
       ctx.beginPath();
@@ -539,10 +544,9 @@
       ctx.lineTo(cx, s.y + s.h);
       ctx.lineTo(s.x, cy);
       ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      if (hasFill) ctx.fill();
+      if (hasStroke || selected) ctx.stroke();
     } else if (s.type === "text") {
-      // text shapes have a subtle bg
       if (selected) {
         ctx.strokeStyle = "#fbbf24";
         ctx.setLineDash([4, 3]);
@@ -858,8 +862,11 @@
       const hit = hitTest(world.x, world.y);
       if (hit) {
         arrowStart = hit.id;
-        creating = { type: "arrow", currentX: world.x, currentY: world.y };
+        creating = { type: "arrow", currentX: world.x, currentY: world.y, startX: world.x, startY: world.y };
         state.selected = new Set([hit.id]);
+      } else {
+        arrowStart = null;
+        creating = { type: "arrow", currentX: world.x, currentY: world.y, startX: world.x, startY: world.y };
       }
       draw();
     } else {
@@ -1084,11 +1091,25 @@
         const pos = getCanvasPos(e);
         const world = screenToWorld(pos.x, pos.y);
         const hit = hitTest(world.x, world.y);
-        if (hit && arrowStart && hit.id !== arrowStart) {
-          const exists = state.arrows.some((a) => a.from === arrowStart && a.to === hit.id);
-          if (!exists) {
-            state.arrows.push({ id: uid(), from: arrowStart, to: hit.id, color: state.strokeColor });
+        const dist = Math.hypot(world.x - creating.startX, world.y - creating.startY);
+        if (dist > 5) {
+          const arrow = { id: uid(), color: state.strokeColor };
+          if (arrowStart) {
+            arrow.from = arrowStart;
+          } else {
+            arrow.from = null;
+            arrow.x1 = creating.startX;
+            arrow.y1 = creating.startY;
           }
+          if (hit && hit.id !== arrowStart) {
+            arrow.to = hit.id;
+          } else {
+            arrow.to = null;
+            arrow.x2 = world.x;
+            arrow.y2 = world.y;
+          }
+          const duplicate = arrowStart && hit && state.arrows.some((a) => a.from === arrowStart && a.to === hit.id);
+          if (!duplicate) state.arrows.push(arrow);
         }
         arrowStart = null;
         creating = null;
@@ -1265,6 +1286,8 @@
     if (e.key === "t" || e.key === "T") setTool("text");
     if (e.key === "a" || e.key === "A") setTool("arrow");
     if (e.key === "h" || e.key === "H") setTool("hand");
+    if (e.key === "]") { bringForward(); e.preventDefault(); }
+    if (e.key === "[") { sendBackward(); e.preventDefault(); }
   }
 
   function deleteSelected() {
@@ -1280,6 +1303,27 @@
     }
     save();
     draw();
+  }
+
+  // ---------- Z-order ----------
+  function bringForward() {
+    if (!state.selected.size) return;
+    for (let i = state.shapes.length - 2; i >= 0; i--) {
+      if (state.selected.has(state.shapes[i].id) && !state.selected.has(state.shapes[i + 1].id)) {
+        [state.shapes[i], state.shapes[i + 1]] = [state.shapes[i + 1], state.shapes[i]];
+      }
+    }
+    save(); draw();
+  }
+
+  function sendBackward() {
+    if (!state.selected.size) return;
+    for (let i = 1; i < state.shapes.length; i++) {
+      if (state.selected.has(state.shapes[i].id) && !state.selected.has(state.shapes[i - 1].id)) {
+        [state.shapes[i], state.shapes[i - 1]] = [state.shapes[i - 1], state.shapes[i]];
+      }
+    }
+    save(); draw();
   }
 
   // ---------- Zoom controls ----------
@@ -1386,6 +1430,7 @@
     document.getElementById("strokeWidth").value = state.strokeWidth;
     document.getElementById("textColor").value = state.textColor;
     document.getElementById("fillColor").addEventListener("input", (e) => {
+      fillNone.checked = false;
       state.fillColor = e.target.value;
       if (state.selected.size) {
         state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.fill = e.target.value; });
@@ -1393,6 +1438,7 @@
       }
     });
     document.getElementById("strokeColor").addEventListener("input", (e) => {
+      strokeNone.checked = false;
       state.strokeColor = e.target.value;
       if (state.selected.size) {
         state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.stroke = e.target.value; });
@@ -1418,6 +1464,42 @@
         save(); draw();
       }
     });
+
+    const fillNone = document.getElementById("fillNone");
+    const strokeNone = document.getElementById("strokeNone");
+    const fillColorInput = document.getElementById("fillColor");
+    const strokeColorInput = document.getElementById("strokeColor");
+
+    fillNone.addEventListener("change", () => {
+      if (fillNone.checked) {
+        state.fillColor = "transparent";
+        fillColorInput.disabled = true;
+      } else {
+        state.fillColor = fillColorInput.value;
+        fillColorInput.disabled = false;
+      }
+      if (state.selected.size) {
+        state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.fill = state.fillColor; });
+        save(); draw();
+      }
+    });
+
+    strokeNone.addEventListener("change", () => {
+      if (strokeNone.checked) {
+        state.strokeColor = "transparent";
+        strokeColorInput.disabled = true;
+      } else {
+        state.strokeColor = strokeColorInput.value;
+        strokeColorInput.disabled = false;
+      }
+      if (state.selected.size) {
+        state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.stroke = state.strokeColor; });
+        save(); draw();
+      }
+    });
+
+    document.getElementById("bringFwdBtn").addEventListener("click", bringForward);
+    document.getElementById("sendBackBtn").addEventListener("click", sendBackward);
 
     document.getElementById("deleteBtn").addEventListener("click", deleteSelected);
     document.getElementById("clearBtn").addEventListener("click", () => {
