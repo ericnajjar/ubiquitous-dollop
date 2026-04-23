@@ -451,6 +451,48 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert
 .gantt-milestone.priority-low    { background: var(--success); }
 .gantt-milestone:hover { filter: brightness(1.4); }
 
+/* Gantt hierarchy */
+.gantt-indent-1 .gantt-label { padding-left: 28px; }
+.gantt-indent-2 .gantt-label { padding-left: 48px; }
+.gantt-indent-1 .gantt-label::before { content: ''; display: inline-block; width: 10px; height: 1px; background: var(--border); margin-right: 4px; flex-shrink: 0; }
+.gantt-indent-2 .gantt-label::before { content: ''; display: inline-block; width: 10px; height: 1px; background: var(--border); margin-right: 4px; flex-shrink: 0; }
+.gantt-type-dot {
+  width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+}
+.gantt-type-dot.type-project { background: #a78bfa; }
+.gantt-type-dot.type-epic    { background: #60a5fa; }
+.gantt-type-dot.type-story   { background: #34d399; }
+
+/* Card type badges */
+.card-type-badge {
+  display: inline-block;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+  text-transform: uppercase; padding: 2px 6px;
+  border-radius: 4px; margin-bottom: 5px;
+}
+.card-type-project { background: rgba(167,139,250,.18); color: #a78bfa; border: 1px solid rgba(167,139,250,.3); }
+.card-type-epic    { background: rgba(96,165,250,.18);  color: #60a5fa; border: 1px solid rgba(96,165,250,.3); }
+.card-type-story   { background: rgba(52,211,153,.14);  color: #34d399; border: 1px solid rgba(52,211,153,.28); }
+
+.card-parent-chip {
+  font-size: 11px; color: var(--muted);
+  margin-bottom: 4px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: color .15s;
+}
+.card-parent-chip:hover { color: var(--accent); }
+
+.card-child-row {
+  padding: 3px 6px; font-size: 12px; color: var(--muted);
+  cursor: pointer; border-radius: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background .12s, color .12s;
+}
+.card-child-row:hover { background: rgba(255,255,255,.05); color: var(--text); }
+.card-child-row-type {
+  font-size: 10px; font-weight: 700; margin-right: 4px;
+}
+
 /* Plan modal */
 .plan-modal { max-width: 560px; }
 

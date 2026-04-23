@@ -8,6 +8,34 @@
     return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
 
+  const TYPE_CONFIG = {
+    project: { label: 'Project', childType: 'epic' },
+    epic:    { label: 'Epic',    childType: 'story' },
+    story:   { label: 'Story',   childType: null },
+  };
+
+  function getAllCards() {
+    const all = [];
+    state.columns.forEach(col => col.cards.forEach(card => all.push({ card, colId: col.id })));
+    return all;
+  }
+
+  function findCardById(id) {
+    for (const col of state.columns) {
+      const card = col.cards.find(c => c.id === id);
+      if (card) return { card, colId: col.id };
+    }
+    return null;
+  }
+
+  function getChildren(parentId) {
+    const all = [];
+    state.columns.forEach(col => col.cards.forEach(card => {
+      if (card.parentId === parentId) all.push({ card, colId: col.id });
+    }));
+    return all;
+  }
+
   function defaultColumns() {
     return [
       { id: uid(), title: "To Do", cards: [] },
@@ -442,6 +470,26 @@
       });
     }
 
+    const cardType = card.cardType || 'story';
+    const typeConf = TYPE_CONFIG[cardType];
+
+    const typeBadge = document.createElement('span');
+    typeBadge.className = `card-type-badge card-type-${cardType}`;
+    typeBadge.textContent = typeConf.label;
+    el.appendChild(typeBadge);
+
+    if (card.parentId) {
+      const parentEntry = findCardById(card.parentId);
+      if (parentEntry) {
+        const parentChip = document.createElement('div');
+        parentChip.className = 'card-parent-chip';
+        parentChip.textContent = '↑ ' + parentEntry.card.title;
+        parentChip.title = 'Parent: ' + parentEntry.card.title;
+        parentChip.addEventListener('click', (e) => { e.stopPropagation(); openModal(parentEntry.card, parentEntry.colId); });
+        el.appendChild(parentChip);
+      }
+    }
+
     const title = document.createElement("p");
     title.className = "card-title";
     title.textContent = card.title;
@@ -526,6 +574,46 @@
       });
     }
 
+    // Children accordion (for projects and epics)
+    if (typeConf.childType) {
+      const children = getChildren(card.id);
+      if (children.length) {
+        const childLabel = typeConf.childType === 'epic' ? 'Epics' : 'Stories';
+        const acc = document.createElement('div');
+        acc.className = 'card-accordion card-children-acc';
+        const accH = document.createElement('button');
+        accH.type = 'button';
+        accH.className = 'card-acc-header';
+        const arrow = document.createElement('span');
+        arrow.className = 'card-acc-arrow';
+        arrow.textContent = '▸';
+        accH.appendChild(arrow);
+        accH.appendChild(document.createTextNode(' ' + childLabel + ' '));
+        const cnt = document.createElement('span');
+        cnt.className = 'card-acc-count';
+        cnt.textContent = '(' + children.length + ')';
+        accH.appendChild(cnt);
+        const accBody = document.createElement('div');
+        accBody.className = 'card-acc-body';
+        accBody.hidden = true;
+        children.forEach(({ card: child, colId: childColId }) => {
+          const childRow = document.createElement('div');
+          childRow.className = 'card-child-row';
+          const childType = document.createElement('span');
+          childType.className = `card-child-row-type card-type-${child.cardType || 'story'}`;
+          childType.textContent = TYPE_CONFIG[child.cardType || 'story'].label;
+          childRow.appendChild(childType);
+          childRow.appendChild(document.createTextNode(child.title));
+          childRow.addEventListener('click', (e) => { e.stopPropagation(); openModal(child, childColId); });
+          accBody.appendChild(childRow);
+        });
+        accH.addEventListener('click', (e) => { e.stopPropagation(); accBody.hidden = !accBody.hidden; arrow.textContent = accBody.hidden ? '▸' : '▾'; });
+        acc.appendChild(accH);
+        acc.appendChild(accBody);
+        el.appendChild(acc);
+      }
+    }
+
     // Footer: countdown + edit
     const footer = document.createElement("div");
     footer.className = "card-footer";
@@ -600,6 +688,47 @@
   }
 
   // ---------- Gantt ----------
+  function buildGanttHierarchy(entriesWithDates) {
+    const entryMap = new Map(entriesWithDates.map(e => [e.card.id, e]));
+    const result = [];
+    const visited = new Set();
+
+    function addCard(card, col, indent) {
+      if (visited.has(card.id)) return;
+      visited.add(card.id);
+      if (entryMap.has(card.id)) result.push({ card, col, indent });
+    }
+
+    function addEpicAndStories(epicCard, epicCol, indent) {
+      addCard(epicCard, epicCol, indent);
+      state.columns.forEach(c => c.cards.forEach(child => {
+        if (child.parentId === epicCard.id) addCard(child, c, indent + 1);
+      }));
+    }
+
+    // Pass 1: projects and their epics/stories
+    state.columns.forEach(col => col.cards.forEach(card => {
+      if ((card.cardType || 'story') !== 'project') return;
+      addCard(card, col, 0);
+      state.columns.forEach(c => c.cards.forEach(epic => {
+        if (epic.parentId === card.id) addEpicAndStories(epic, c, 1);
+      }));
+    }));
+
+    // Pass 2: epics not under a project (or project not in chart)
+    state.columns.forEach(col => col.cards.forEach(card => {
+      if ((card.cardType || 'story') !== 'epic') return;
+      addEpicAndStories(card, col, 0);
+    }));
+
+    // Pass 3: remaining entries (stories without epic, untyped)
+    entriesWithDates.forEach(e => {
+      if (!visited.has(e.card.id)) result.push({ card: e.card, col: e.col, indent: 0 });
+    });
+
+    return result;
+  }
+
   function renderGantt() {
     const container = document.getElementById("ganttView");
     if (!container) return;
@@ -622,6 +751,8 @@
       return;
     }
 
+    const hierarchyList = buildGanttHierarchy(entries);
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const allDates = [today];
@@ -643,12 +774,11 @@
     }
     const todayPct = Math.max(0, Math.min(100, ((today - minDate) / totalMs) * 100));
 
-    // Build ticks (weekly for <=60 days, monthly otherwise)
     const ticks = [];
     if (totalDays <= 60) {
       const first = new Date(minDate);
       const dow = first.getDay();
-      first.setDate(first.getDate() + (8 - dow) % 7); // advance to next Monday
+      first.setDate(first.getDate() + (8 - dow) % 7);
       for (let d = new Date(first); d <= maxDate; d.setDate(d.getDate() + 7)) {
         const nd = new Date(d);
         ticks.push({ pct: ((nd - minDate) / totalMs) * 100, label: nd.toLocaleDateString(undefined, { month: "short", day: "numeric" }) });
@@ -681,7 +811,7 @@
     const wrap = document.createElement("div");
     wrap.className = "gantt-wrap";
 
-    // Header row with tick labels
+    // Header row
     const hdrRow = document.createElement("div");
     hdrRow.className = "gantt-row gantt-header-row";
     const hdrLabel = document.createElement("div");
@@ -699,67 +829,62 @@
     hdrRow.appendChild(hdrTrack);
     wrap.appendChild(hdrRow);
 
-    // One group per column
-    state.columns.forEach((col) => {
-      const colEntries = entries.filter((e) => e.col.id === col.id);
-      if (!colEntries.length) return;
+    // Hierarchy rows
+    hierarchyList.forEach(({ card, col, indent }) => {
+      const row = document.createElement("div");
+      row.className = `gantt-row gantt-card-row gantt-indent-${indent}`;
+      row.addEventListener("click", () => openModal(card, col.id));
 
-      const groupRow = document.createElement("div");
-      groupRow.className = "gantt-row gantt-group-hdr-row";
-      const groupLabel = document.createElement("div");
-      groupLabel.className = "gantt-label gantt-group-label";
-      groupLabel.textContent = col.title;
-      const groupTrack = makeTrack("gantt-group-track", 28);
-      groupRow.appendChild(groupLabel);
-      groupRow.appendChild(groupTrack);
-      wrap.appendChild(groupRow);
+      const label = document.createElement("div");
+      label.className = "gantt-label gantt-card-label";
 
-      colEntries.forEach(({ card }) => {
-        const row = document.createElement("div");
-        row.className = "gantt-row gantt-card-row";
-        row.addEventListener("click", () => openModal(card, col.id));
+      const typeDot = document.createElement("span");
+      typeDot.className = `gantt-type-dot type-${card.cardType || 'story'}`;
+      label.appendChild(typeDot);
 
-        const label = document.createElement("div");
-        label.className = "gantt-label gantt-card-label";
-        const dot = document.createElement("span");
-        dot.className = `gantt-priority-dot priority-${card.priority}`;
-        const titleSpan = document.createElement("span");
-        titleSpan.textContent = card.title.length > 22 ? card.title.slice(0, 22) + "…" : card.title;
-        titleSpan.title = card.title;
-        label.appendChild(dot);
-        label.appendChild(titleSpan);
+      const titleSpan = document.createElement("span");
+      const maxLen = indent === 0 ? 22 : indent === 1 ? 18 : 14;
+      titleSpan.textContent = card.title.length > maxLen ? card.title.slice(0, maxLen) + "…" : card.title;
+      titleSpan.title = card.title + ' [' + col.title + ']';
+      label.appendChild(titleSpan);
 
-        const track = makeTrack("gantt-card-track", 44);
+      const colBadge = document.createElement("span");
+      colBadge.style.cssText = "font-size:10px;color:var(--muted);margin-left:auto;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50px";
+      colBadge.textContent = col.title;
+      colBadge.title = col.title;
+      label.appendChild(colBadge);
 
-        const startPct = card.startDate ? datePct(card.startDate) : null;
-        const endPct = card.dueDate ? datePct(card.dueDate) : null;
+      const track = makeTrack("gantt-card-track", indent === 0 ? 44 : 36);
 
-        if (startPct !== null && endPct !== null) {
-          const bar = document.createElement("div");
-          bar.className = `gantt-bar priority-${card.priority}`;
-          const left = Math.min(startPct, endPct);
-          const rawW = Math.max(Math.abs(endPct - startPct), 0.5);
-          bar.style.left = left + "%";
-          bar.style.width = Math.min(rawW, 100 - left) + "%";
-          bar.title = `${card.title}\n${card.startDate} → ${card.dueDate}`;
-          bar.addEventListener("click", (e) => { e.stopPropagation(); openModal(card, col.id); });
-          track.appendChild(bar);
-        } else {
-          const mp = endPct ?? startPct;
-          if (mp !== null) {
-            const ms = document.createElement("div");
-            ms.className = `gantt-milestone priority-${card.priority}`;
-            ms.style.left = mp + "%";
-            ms.title = card.title;
-            ms.addEventListener("click", (e) => { e.stopPropagation(); openModal(card, col.id); });
-            track.appendChild(ms);
-          }
+      const startPct = card.startDate ? datePct(card.startDate) : null;
+      const endPct = card.dueDate ? datePct(card.dueDate) : null;
+
+      if (startPct !== null && endPct !== null) {
+        const bar = document.createElement("div");
+        bar.className = `gantt-bar priority-${card.priority}`;
+        const left = Math.min(startPct, endPct);
+        const rawW = Math.max(Math.abs(endPct - startPct), 0.5);
+        bar.style.left = left + "%";
+        bar.style.width = Math.min(rawW, 100 - left) + "%";
+        if (indent === 0) bar.style.height = "24px";
+        bar.title = `${card.title}\n${card.startDate} → ${card.dueDate}`;
+        bar.addEventListener("click", (e) => { e.stopPropagation(); openModal(card, col.id); });
+        track.appendChild(bar);
+      } else {
+        const mp = endPct ?? startPct;
+        if (mp !== null) {
+          const ms = document.createElement("div");
+          ms.className = `gantt-milestone priority-${card.priority}`;
+          ms.style.left = mp + "%";
+          ms.title = card.title;
+          ms.addEventListener("click", (e) => { e.stopPropagation(); openModal(card, col.id); });
+          track.appendChild(ms);
         }
+      }
 
-        row.appendChild(label);
-        row.appendChild(track);
-        wrap.appendChild(row);
-      });
+      row.appendChild(label);
+      row.appendChild(track);
+      wrap.appendChild(row);
     });
 
     container.appendChild(wrap);
@@ -1106,6 +1231,24 @@
     return [];
   }
 
+  function populateParentSelect(cardType, currentParentId, excludeId) {
+    const sel = document.getElementById('cardParent');
+    const field = document.getElementById('cardParentField');
+    sel.innerHTML = '<option value="">— None —</option>';
+    if (cardType === 'project') { field.style.display = 'none'; return; }
+    field.style.display = '';
+    const targetType = cardType === 'epic' ? 'project' : 'epic';
+    getAllCards().forEach(({ card }) => {
+      if (card.id === excludeId) return;
+      if ((card.cardType || 'story') !== targetType) return;
+      const opt = document.createElement('option');
+      opt.value = card.id;
+      opt.textContent = card.title;
+      if (card.id === currentParentId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
   function populateProjectSelect(selectedId) {
     const sel = document.getElementById("cardProject");
     sel.innerHTML = '<option value="">None</option>';
@@ -1145,6 +1288,11 @@
 
     populateProjectSelect(card?.projectId || "");
 
+    const cardTypeEl = document.getElementById('cardType');
+    cardTypeEl.value = card?.cardType || 'story';
+    populateParentSelect(cardTypeEl.value, card?.parentId || null, card?.id || null);
+    cardTypeEl.onchange = () => populateParentSelect(cardTypeEl.value, null, editingCardId);
+
     const moveWrap = document.getElementById("cardMoveWrap");
     moveWrap.innerHTML = "";
     const ds = window.datascope;
@@ -1182,10 +1330,15 @@
     const moveSel = document.querySelector("#cardMoveWrap .team-move-select");
     const targetTeamId = moveSel ? (moveSel.value || null) : (state.teamId || null);
 
+    const cardType = document.getElementById('cardType').value;
+    const parentId = document.getElementById('cardParent').value || null;
+
     const cardData = {
       title,
       description: document.getElementById("cardDesc").value.trim(),
       priority: document.getElementById("cardPriority").value,
+      cardType,
+      parentId: cardType === 'project' ? null : parentId,
       startDate: startRaw || "",
       dueDate: dueRaw || "",
       reminder: reminderRaw || "",
@@ -1246,6 +1399,7 @@
     if (!editingCardId) return;
     if (!confirm("Delete this card?")) return;
     state.columns.forEach((col) => {
+      col.cards.forEach((c) => { if (c.parentId === editingCardId) c.parentId = null; });
       col.cards = col.cards.filter((c) => c.id !== editingCardId);
     });
     save();
