@@ -478,6 +478,7 @@
         items.forEach(item => {
           const row = document.createElement("div");
           row.className = "card-acc-item";
+          row.style.cursor = "pointer";
           if (item.thumbnail || item.image) {
             const img = document.createElement("img");
             img.className = "card-acc-thumb";
@@ -489,6 +490,7 @@
           nm.textContent = item.name || "Untitled";
           if (key === "decks" && item.slideCount) nm.textContent += " (" + item.slideCount + " slides)";
           row.appendChild(nm);
+          row.addEventListener("click", (e) => { e.stopPropagation(); showPreview(key, item); });
           accBody.appendChild(row);
         });
 
@@ -825,6 +827,8 @@
         items.forEach((item, idx) => {
           const row = document.createElement("div");
           row.className = "attach-item";
+          row.style.cursor = "pointer";
+          row.addEventListener("click", () => showPreview(key, item));
           if (item.thumbnail || item.image) {
             const thumb = document.createElement("img");
             thumb.className = "attach-thumb";
@@ -909,6 +913,168 @@
       section.appendChild(body);
       container.appendChild(section);
     });
+  }
+
+  // ---------- Attachment preview ----------
+  function loadCanvasById(id) {
+    try {
+      const raw = localStorage.getItem("datascope_canvas");
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) return data.find(c => c.id === id) || null;
+      return null;
+    } catch (_) { return null; }
+  }
+
+  function loadChartById(id) {
+    try {
+      const raw = localStorage.getItem("datascope_saved_charts");
+      if (!raw) return null;
+      return JSON.parse(raw).find(c => c.id === id) || null;
+    } catch (_) { return null; }
+  }
+
+  function loadDeckById(id) {
+    try {
+      const raw = localStorage.getItem("datascope_slides");
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (data.projects) return data.projects.find(p => p.id === id) || null;
+      return null;
+    } catch (_) { return null; }
+  }
+
+  function renderCanvasSnapshot(cd) {
+    const shapes = cd.shapes || [];
+    const arrows = cd.arrows || [];
+    if (!shapes.length) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    shapes.forEach(s => {
+      minX = Math.min(minX, s.x); minY = Math.min(minY, s.y);
+      maxX = Math.max(maxX, s.x + s.w); maxY = Math.max(maxY, s.y + s.h);
+    });
+    const pad = 30, w = maxX - minX + pad * 2, h = maxY - minY + pad * 2;
+    const off = document.createElement("canvas");
+    const sc = Math.min(2, 1200 / w);
+    off.width = w * sc; off.height = h * sc;
+    const c = off.getContext("2d");
+    c.scale(sc, sc);
+    c.fillStyle = "#0f1126";
+    c.fillRect(0, 0, w, h);
+    c.translate(pad - minX, pad - minY);
+
+    arrows.forEach(a => {
+      const from = shapes.find(s => s.id === a.from);
+      const to = shapes.find(s => s.id === a.to);
+      if (!from || !to) return;
+      const fx = from.x + from.w / 2, fy = from.y + from.h / 2;
+      const tx = to.x + to.w / 2, ty = to.y + to.h / 2;
+      c.beginPath(); c.moveTo(fx, fy); c.lineTo(tx, ty);
+      c.strokeStyle = a.color || "#6ea8ff"; c.lineWidth = 2; c.stroke();
+      const ang = Math.atan2(ty - fy, tx - fx);
+      c.beginPath();
+      c.moveTo(tx, ty);
+      c.lineTo(tx - 10 * Math.cos(ang - 0.4), ty - 10 * Math.sin(ang - 0.4));
+      c.moveTo(tx, ty);
+      c.lineTo(tx - 10 * Math.cos(ang + 0.4), ty - 10 * Math.sin(ang + 0.4));
+      c.stroke();
+    });
+
+    shapes.forEach(s => {
+      c.fillStyle = s.fill || "#1d254a";
+      c.strokeStyle = s.stroke || "#6ea8ff";
+      c.lineWidth = s.strokeWidth || 1.5;
+      if (s.type === "rect" || s.type === "text") {
+        const r = 6;
+        c.beginPath();
+        c.moveTo(s.x + r, s.y);
+        c.lineTo(s.x + s.w - r, s.y); c.quadraticCurveTo(s.x + s.w, s.y, s.x + s.w, s.y + r);
+        c.lineTo(s.x + s.w, s.y + s.h - r); c.quadraticCurveTo(s.x + s.w, s.y + s.h, s.x + s.w - r, s.y + s.h);
+        c.lineTo(s.x + r, s.y + s.h); c.quadraticCurveTo(s.x, s.y + s.h, s.x, s.y + s.h - r);
+        c.lineTo(s.x, s.y + r); c.quadraticCurveTo(s.x, s.y, s.x + r, s.y);
+        c.closePath();
+        if (s.type === "rect") { c.fill(); c.stroke(); }
+      } else if (s.type === "circle") {
+        c.beginPath();
+        c.ellipse(s.x + s.w / 2, s.y + s.h / 2, s.w / 2, s.h / 2, 0, 0, Math.PI * 2);
+        c.fill(); c.stroke();
+      } else if (s.type === "diamond") {
+        const cx = s.x + s.w / 2, cy = s.y + s.h / 2;
+        c.beginPath();
+        c.moveTo(cx, s.y); c.lineTo(s.x + s.w, cy); c.lineTo(cx, s.y + s.h); c.lineTo(s.x, cy);
+        c.closePath(); c.fill(); c.stroke();
+      }
+      if (s.label) {
+        c.fillStyle = s.textColor || "#e7ecff";
+        c.font = (s.fontSize || 14) + "px Inter, system-ui, sans-serif";
+        c.textAlign = "center"; c.textBaseline = "middle";
+        c.fillText(s.label, s.x + s.w / 2, s.y + s.h / 2);
+      }
+    });
+    return off.toDataURL("image/png");
+  }
+
+  function renderDeckPreview(deck, container) {
+    (deck.slides || []).forEach((slide, idx) => {
+      const card = document.createElement("div");
+      card.className = "preview-slide";
+      card.style.backgroundColor = slide.bgColor || "#1a1a2e";
+      card.style.color = slide.textColor || "#ffffff";
+      const num = document.createElement("span");
+      num.className = "preview-slide-num";
+      num.textContent = idx + 1;
+      card.appendChild(num);
+      const ct = slide.content || {};
+      if (ct.title) { const t = document.createElement("h3"); t.textContent = ct.title; card.appendChild(t); }
+      if (ct.subtitle) { const s = document.createElement("p"); s.textContent = ct.subtitle; card.appendChild(s); }
+      if (ct.body) { const b = document.createElement("p"); b.className = "preview-slide-body"; b.textContent = ct.body; card.appendChild(b); }
+      if (ct.bullets) { const b = document.createElement("p"); b.className = "preview-slide-body"; b.textContent = ct.bullets; card.appendChild(b); }
+      if (ct.image) { const img = document.createElement("img"); img.className = "preview-slide-img"; img.src = ct.image; card.appendChild(img); }
+      container.appendChild(card);
+    });
+  }
+
+  function showPreview(type, item) {
+    const overlay = document.getElementById("previewOverlay");
+    const content = document.getElementById("previewContent");
+    const title = document.getElementById("previewTitle");
+    const openLink = document.getElementById("previewOpenLink");
+    title.textContent = item.name || "Preview";
+    content.innerHTML = "";
+
+    if (type === "canvases") {
+      openLink.href = "canvas.html";
+      const cd = loadCanvasById(item.id);
+      if (cd) {
+        const src = renderCanvasSnapshot(cd);
+        if (src) {
+          const img = document.createElement("img");
+          img.className = "preview-image";
+          img.src = src;
+          content.appendChild(img);
+        } else { content.innerHTML = '<p class="preview-empty">Canvas is empty.</p>'; }
+      } else { content.innerHTML = '<p class="preview-empty">Canvas not found.</p>'; }
+    } else if (type === "charts") {
+      openLink.href = "charts.html";
+      const ch = loadChartById(item.id);
+      if (ch && ch.thumbnail) {
+        const img = document.createElement("img");
+        img.className = "preview-image";
+        img.src = ch.thumbnail;
+        content.appendChild(img);
+      } else { content.innerHTML = '<p class="preview-empty">Chart preview not available.</p>'; }
+    } else if (type === "decks") {
+      openLink.href = "slides.html";
+      const dk = loadDeckById(item.id);
+      if (dk && dk.slides?.length) {
+        renderDeckPreview(dk, content);
+      } else { content.innerHTML = '<p class="preview-empty">Deck not found.</p>'; }
+    }
+    overlay.hidden = false;
+  }
+
+  function closePreview() {
+    document.getElementById("previewOverlay").hidden = true;
   }
 
   function loadGlobalProjects() {
@@ -1255,8 +1421,15 @@ Guidelines:
     document.getElementById("modalOverlay").addEventListener("click", (e) => {
       if (e.target === document.getElementById("modalOverlay")) closeModal();
     });
+    // Preview overlay
+    document.getElementById("previewClose").addEventListener("click", closePreview);
+    document.getElementById("previewOverlay").addEventListener("click", (e) => {
+      if (e.target === document.getElementById("previewOverlay")) closePreview();
+    });
+
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
+        if (!document.getElementById("previewOverlay").hidden) { closePreview(); return; }
         closeModal();
         closePlanModal();
       }
