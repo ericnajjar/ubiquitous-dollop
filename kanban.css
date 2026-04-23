@@ -503,3 +503,90 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert
   height: 60px; background: rgba(110,168,255,.06);
   pointer-events: none;
 }
+
+/* Modal body scroll */
+.modal-body { max-height: calc(80vh - 140px); overflow-y: auto; }
+
+/* Attachment accordion sections (modal) */
+.attach-sections { display: flex; flex-direction: column; gap: 4px; }
+
+.attach-accordion { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.attach-accordion-header {
+  display: flex; align-items: center; gap: 4px; width: 100%;
+  padding: 8px 12px; background: var(--surface-2); border: none;
+  color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background .15s, color .15s; text-align: left;
+}
+.attach-accordion-header:hover { background: var(--surface-3); color: var(--text); }
+.attach-arrow { font-size: 12px; width: 14px; text-align: center; }
+.attach-count { font-size: 11px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+
+.attach-accordion-body { padding: 8px 10px; }
+.attach-accordion-body[hidden] { display: none; }
+
+.attach-items-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.attach-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; background: var(--surface-2);
+  border-radius: 6px; transition: background .15s;
+}
+.attach-item:hover { background: var(--surface-3); }
+.attach-thumb {
+  width: 40px; height: 28px; object-fit: cover;
+  border-radius: 4px; border: 1px solid var(--border); flex-shrink: 0;
+}
+.attach-item-name { flex: 1; font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attach-remove {
+  width: 22px; height: 22px; border-radius: 4px;
+  background: transparent; border: none; color: var(--muted);
+  cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center;
+  transition: color .15s, background .15s; flex-shrink: 0;
+}
+.attach-remove:hover { color: var(--danger); background: rgba(248,113,113,.1); }
+
+.attach-add-btn { margin-bottom: 4px; }
+
+.attach-picker {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 4px; max-height: 180px; overflow-y: auto;
+}
+.attach-picker[hidden] { display: none; }
+.attach-picker-empty { font-size: 12px; color: var(--muted); padding: 10px; margin: 0; text-align: center; }
+.attach-picker-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 7px 10px; background: transparent; border: none;
+  color: var(--text); font: inherit; font-size: 13px;
+  cursor: pointer; border-radius: 6px; text-align: left;
+  transition: background .15s;
+}
+.attach-picker-item:hover { background: rgba(110,168,255,.1); }
+.attach-picker-thumb {
+  width: 36px; height: 24px; object-fit: cover;
+  border-radius: 3px; border: 1px solid var(--border); flex-shrink: 0;
+}
+
+/* Card accordion rows (board view) */
+.card-accordion { margin-top: 6px; }
+.card-acc-header {
+  display: flex; align-items: center; gap: 4px; width: 100%;
+  padding: 4px 6px; background: rgba(255,255,255,.04); border: none;
+  border-radius: 5px; color: var(--muted); font: inherit; font-size: 11px;
+  font-weight: 600; cursor: pointer; text-align: left;
+  transition: background .15s, color .15s;
+}
+.card-acc-header:hover { background: rgba(255,255,255,.08); color: var(--text); }
+.card-acc-arrow { font-size: 10px; width: 12px; text-align: center; }
+.card-acc-count { font-weight: 400; opacity: .7; }
+.card-acc-body { padding: 4px 0 0; }
+.card-acc-body[hidden] { display: none; }
+.card-acc-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 6px; font-size: 11px; color: var(--muted);
+  border-radius: 4px; transition: background .15s;
+}
+.card-acc-item:hover { background: rgba(255,255,255,.04); }
+.card-acc-thumb {
+  width: 32px; height: 20px; object-fit: cover;
+  border-radius: 3px; border: 1px solid var(--border); flex-shrink: 0;
+}
+.card-acc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

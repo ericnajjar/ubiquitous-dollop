@@ -446,6 +446,63 @@
       el.appendChild(tagsEl);
     }
 
+    // Attachment accordions
+    if (card.attachments) {
+      const accTypes = [
+        { key: "canvases", label: "Canvas" },
+        { key: "charts", label: "Charts" },
+        { key: "decks", label: "Decks" }
+      ];
+      accTypes.forEach(({ key, label }) => {
+        const items = card.attachments[key];
+        if (!items || !items.length) return;
+        const acc = document.createElement("div");
+        acc.className = "card-accordion";
+        const accH = document.createElement("button");
+        accH.type = "button";
+        accH.className = "card-acc-header";
+        const accArrow = document.createElement("span");
+        accArrow.className = "card-acc-arrow";
+        accArrow.textContent = "▸";
+        accH.appendChild(accArrow);
+        accH.appendChild(document.createTextNode(" " + label + " "));
+        const accCount = document.createElement("span");
+        accCount.className = "card-acc-count";
+        accCount.textContent = "(" + items.length + ")";
+        accH.appendChild(accCount);
+
+        const accBody = document.createElement("div");
+        accBody.className = "card-acc-body";
+        accBody.hidden = true;
+
+        items.forEach(item => {
+          const row = document.createElement("div");
+          row.className = "card-acc-item";
+          if (item.thumbnail || item.image) {
+            const img = document.createElement("img");
+            img.className = "card-acc-thumb";
+            img.src = item.thumbnail || item.image;
+            row.appendChild(img);
+          }
+          const nm = document.createElement("span");
+          nm.className = "card-acc-name";
+          nm.textContent = item.name || "Untitled";
+          if (key === "decks" && item.slideCount) nm.textContent += " (" + item.slideCount + " slides)";
+          row.appendChild(nm);
+          accBody.appendChild(row);
+        });
+
+        accH.addEventListener("click", (e) => {
+          e.stopPropagation();
+          accBody.hidden = !accBody.hidden;
+          accArrow.textContent = accBody.hidden ? "▸" : "▾";
+        });
+        acc.appendChild(accH);
+        acc.appendChild(accBody);
+        el.appendChild(acc);
+      });
+    }
+
     // Footer: countdown + edit
     const footer = document.createElement("div");
     footer.className = "card-footer";
@@ -688,6 +745,171 @@
   // ---------- Modal ----------
   let editingCardId = null;
   let editingColId = null;
+  let modalAttachments = { canvases: [], charts: [], decks: [] };
+
+  function loadAvailableCanvases() {
+    try {
+      const raw = localStorage.getItem("datascope_canvas");
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) return data.map(c => ({ id: c.id, name: c.name || "Untitled" }));
+      return [];
+    } catch (_) { return []; }
+  }
+
+  function loadAvailableCharts() {
+    try {
+      const raw = localStorage.getItem("datascope_saved_charts");
+      if (!raw) return [];
+      return JSON.parse(raw).map(c => ({ id: c.id, name: c.name || "Untitled", thumbnail: c.thumbnail || "" }));
+    } catch (_) { return []; }
+  }
+
+  function loadAvailableDecks() {
+    try {
+      const raw = localStorage.getItem("datascope_slides");
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      if (data.projects) return data.projects.map(p => ({ id: p.id, name: p.name || "Untitled", slideCount: p.slides?.length || 0 }));
+      return [];
+    } catch (_) { return []; }
+  }
+
+  function buildAttachSections() {
+    const container = document.getElementById("attachSections");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const sections = [
+      { key: "canvases", label: "Canvas", loadFn: loadAvailableCanvases },
+      { key: "charts", label: "Charts", loadFn: loadAvailableCharts },
+      { key: "decks", label: "Decks", loadFn: loadAvailableDecks }
+    ];
+
+    sections.forEach(({ key, label, loadFn }) => {
+      const section = document.createElement("div");
+      section.className = "attach-accordion";
+
+      const header = document.createElement("button");
+      header.type = "button";
+      header.className = "attach-accordion-header";
+      const arrow = document.createElement("span");
+      arrow.className = "attach-arrow";
+      arrow.textContent = "▸";
+      const headerText = document.createElement("span");
+      headerText.textContent = " " + label + " ";
+      const count = document.createElement("span");
+      count.className = "attach-count";
+
+      header.appendChild(arrow);
+      header.appendChild(headerText);
+      header.appendChild(count);
+
+      const body = document.createElement("div");
+      body.className = "attach-accordion-body";
+      body.hidden = true;
+
+      header.addEventListener("click", () => {
+        body.hidden = !body.hidden;
+        arrow.textContent = body.hidden ? "▸" : "▾";
+      });
+
+      const itemsContainer = document.createElement("div");
+      itemsContainer.className = "attach-items-list";
+
+      function renderItems() {
+        itemsContainer.innerHTML = "";
+        const items = modalAttachments[key] || [];
+        count.textContent = "(" + items.length + ")";
+
+        items.forEach((item, idx) => {
+          const row = document.createElement("div");
+          row.className = "attach-item";
+          if (item.thumbnail || item.image) {
+            const thumb = document.createElement("img");
+            thumb.className = "attach-thumb";
+            thumb.src = item.thumbnail || item.image;
+            row.appendChild(thumb);
+          }
+          const name = document.createElement("span");
+          name.className = "attach-item-name";
+          name.textContent = item.name || "Untitled";
+          if (key === "decks" && item.slideCount) name.textContent += " (" + item.slideCount + " slides)";
+          row.appendChild(name);
+
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "attach-remove";
+          removeBtn.textContent = "×";
+          removeBtn.title = "Remove";
+          removeBtn.addEventListener("click", () => {
+            modalAttachments[key].splice(idx, 1);
+            renderItems();
+          });
+          row.appendChild(removeBtn);
+          itemsContainer.appendChild(row);
+        });
+      }
+
+      renderItems();
+      body.appendChild(itemsContainer);
+
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "btn btn-ghost btn-sm attach-add-btn";
+      addBtn.textContent = "+ Attach";
+
+      const picker = document.createElement("div");
+      picker.className = "attach-picker";
+      picker.hidden = true;
+
+      addBtn.addEventListener("click", () => {
+        picker.hidden = !picker.hidden;
+        if (!picker.hidden) {
+          picker.innerHTML = "";
+          const avail = loadFn();
+          const attachedIds = new Set((modalAttachments[key] || []).map(a => a.id));
+          const unattached = avail.filter(a => !attachedIds.has(a.id));
+
+          if (!unattached.length) {
+            const empty = document.createElement("p");
+            empty.className = "attach-picker-empty";
+            empty.textContent = "No items available.";
+            picker.appendChild(empty);
+          } else {
+            unattached.forEach(item => {
+              const opt = document.createElement("button");
+              opt.type = "button";
+              opt.className = "attach-picker-item";
+              if (item.thumbnail) {
+                const img = document.createElement("img");
+                img.className = "attach-picker-thumb";
+                img.src = item.thumbnail;
+                opt.appendChild(img);
+              }
+              const nm = document.createElement("span");
+              nm.textContent = item.name || "Untitled";
+              if (key === "decks" && item.slideCount) nm.textContent += " (" + item.slideCount + " slides)";
+              opt.appendChild(nm);
+              opt.addEventListener("click", () => {
+                if (!modalAttachments[key]) modalAttachments[key] = [];
+                modalAttachments[key].push({ ...item });
+                picker.hidden = true;
+                renderItems();
+              });
+              picker.appendChild(opt);
+            });
+          }
+        }
+      });
+
+      body.appendChild(addBtn);
+      body.appendChild(picker);
+      section.appendChild(header);
+      section.appendChild(body);
+      container.appendChild(section);
+    });
+  }
 
   function loadGlobalProjects() {
     try {
@@ -736,6 +958,9 @@
 
     populateProjectSelect(card?.projectId || "");
 
+    modalAttachments = JSON.parse(JSON.stringify(card?.attachments || { canvases: [], charts: [], decks: [] }));
+    buildAttachSections();
+
     document.getElementById("modalOverlay").hidden = false;
     document.getElementById("cardTitle").focus();
   }
@@ -766,6 +991,7 @@
       reminder: reminderRaw || "",
       tags,
       projectId: document.getElementById("cardProject").value || "",
+      attachments: JSON.parse(JSON.stringify(modalAttachments)),
     };
 
     if (editingCardId) {
