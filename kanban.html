@@ -74,8 +74,22 @@
           <input type="text" id="cardTitle" placeholder="Card title" autocomplete="off" />
         </div>
         <div class="field">
-          <label for="cardDesc">Description <span class="field-hint">(use [ ] for checkboxes)</span></label>
-          <textarea id="cardDesc" rows="6" placeholder="Add details…&#10;[ ] Unchecked task&#10;[x] Completed task"></textarea>
+          <label>Description</label>
+          <div class="rte-wrap">
+            <div class="rte-toolbar" id="rteToolbar">
+              <button type="button" class="rte-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+              <button type="button" class="rte-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+              <button type="button" class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+              <span class="rte-divider"></span>
+              <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list">
+                <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect x="1" y="3" width="2" height="2" rx="1"/><rect x="5" y="3" width="10" height="2" rx="1"/><rect x="1" y="7" width="2" height="2" rx="1"/><rect x="5" y="7" width="10" height="2" rx="1"/><rect x="1" y="11" width="2" height="2" rx="1"/><rect x="5" y="11" width="10" height="2" rx="1"/></svg>
+              </button>
+              <button type="button" class="rte-btn" id="rteCheckboxBtn" title="Add checkbox">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect x="1.5" y="2.5" width="6" height="6" rx="1.2"/><polyline points="2.8,5.5 4.2,7 6.5,4"/><line x1="9.5" y1="4" x2="14.5" y2="4"/><line x1="9.5" y1="8" x2="14.5" y2="8"/><line x1="9.5" y1="12" x2="14.5" y2="12"/><rect x="1.5" y="9.5" width="6" height="4" rx="1.2"/></svg>
+              </button>
+            </div>
+            <div id="cardDesc" class="rte-editor" contenteditable="true" spellcheck="true" data-placeholder="Add details…"></div>
+          </div>
         </div>
         <div class="field-row">
           <div class="field">

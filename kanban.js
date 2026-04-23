@@ -8,6 +8,16 @@
     return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
 
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function descToHtml(desc) {
+    if (!desc) return '';
+    if (/<[a-z][\s\S]*>/i.test(desc)) return desc;
+    return escapeHtml(desc).replace(/\n/g, '<br>');
+  }
+
   const TYPE_CONFIG = {
     project: { label: 'Project', childType: 'epic' },
     epic:    { label: 'Epic',    childType: 'story' },
@@ -502,54 +512,38 @@
     if (card.description) {
       const desc = document.createElement("div");
       desc.className = "card-desc";
-      const lines = card.description.split('\n');
-      const checkRe = /^\[([ xX])\]\s*(.*)/;
-      let totalChecks = 0, doneChecks = 0;
-      lines.forEach((line, lineIdx) => {
-        const m = line.match(checkRe);
-        if (m) {
-          totalChecks++;
-          const checked = m[1] !== ' ';
-          if (checked) doneChecks++;
-          const wrap = document.createElement('label');
-          wrap.className = 'card-desc-check';
-          const cb = document.createElement('input');
-          cb.type = 'checkbox';
-          cb.checked = checked;
-          cb.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const newLines = card.description.split('\n');
-            newLines[lineIdx] = cb.checked ? '[x] ' + m[2] : '[ ] ' + m[2];
-            card.description = newLines.join('\n');
-            save();
-            renderAll();
-          });
-          const span = document.createElement('span');
-          span.textContent = m[2];
-          if (checked) span.className = 'checked-text';
-          wrap.appendChild(cb);
-          wrap.appendChild(span);
-          desc.appendChild(wrap);
-        } else if (line.trim()) {
-          const p = document.createElement('p');
-          p.className = 'card-desc-line';
-          p.textContent = line;
-          desc.appendChild(p);
-        }
+      desc.innerHTML = descToHtml(card.description);
+      const allCbs = desc.querySelectorAll('.rte-check input[type="checkbox"]');
+      let doneChecks = 0;
+      allCbs.forEach((cb, idx) => {
+        if (cb.hasAttribute('checked')) { cb.checked = true; doneChecks++; }
+        cb.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const tmp = document.createElement('div');
+          tmp.innerHTML = descToHtml(card.description);
+          const storeCbs = tmp.querySelectorAll('.rte-check input[type="checkbox"]');
+          if (storeCbs[idx]) {
+            if (cb.checked) storeCbs[idx].setAttribute('checked', '');
+            else storeCbs[idx].removeAttribute('checked');
+          }
+          card.description = tmp.innerHTML;
+          save();
+          renderAll();
+        });
       });
-      if (totalChecks > 0) {
+      if (allCbs.length > 0) {
         const prog = document.createElement('div');
         prog.className = 'card-desc-progress';
         const barOuter = document.createElement('div');
         barOuter.className = 'card-desc-progress-bar';
         const barFill = document.createElement('div');
         barFill.className = 'card-desc-progress-fill';
-        barFill.style.width = Math.round((doneChecks / totalChecks) * 100) + '%';
+        barFill.style.width = Math.round((doneChecks / allCbs.length) * 100) + '%';
         barOuter.appendChild(barFill);
         prog.appendChild(barOuter);
-        const label = document.createElement('span');
-        label.textContent = doneChecks + '/' + totalChecks;
-        prog.appendChild(label);
+        const lbl = document.createElement('span');
+        lbl.textContent = doneChecks + '/' + allCbs.length;
+        prog.appendChild(lbl);
         desc.appendChild(prog);
       }
       el.appendChild(desc);
@@ -1058,6 +1052,72 @@
     container.appendChild(wrap);
   }
 
+  // ---------- Rich text editor ----------
+  function syncAndGetRteHtml() {
+    const editor = document.getElementById("cardDesc");
+    if (!editor) return '';
+    editor.querySelectorAll('.rte-check input[type="checkbox"]').forEach(cb => {
+      if (cb.checked) cb.setAttribute('checked', '');
+      else cb.removeAttribute('checked');
+    });
+    const html = editor.innerHTML;
+    return (html === '<br>' || html === '') ? '' : html;
+  }
+
+  function updateRteToolbarState() {
+    const toolbar = document.getElementById("rteToolbar");
+    if (!toolbar) return;
+    toolbar.querySelectorAll(".rte-btn[data-cmd]").forEach(btn => {
+      try { btn.classList.toggle("active", document.queryCommandState(btn.dataset.cmd)); } catch (_) {}
+    });
+  }
+
+  function initRteEditor() {
+    const toolbar = document.getElementById("rteToolbar");
+    const editor = document.getElementById("cardDesc");
+    if (!toolbar || !editor) return;
+
+    toolbar.querySelectorAll(".rte-btn[data-cmd]").forEach(btn => {
+      btn.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        editor.focus();
+        document.execCommand(btn.dataset.cmd, false, null);
+        updateRteToolbarState();
+      });
+    });
+
+    document.getElementById("rteCheckboxBtn").addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      editor.focus();
+      const check = document.createElement("div");
+      check.className = "rte-check";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.setAttribute("contenteditable", "false");
+      const span = document.createElement("span");
+      span.className = "rte-check-label";
+      span.textContent = " ";
+      check.appendChild(cb);
+      check.appendChild(span);
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(check);
+        const newRange = document.createRange();
+        newRange.setStart(span, 0);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      } else {
+        editor.appendChild(check);
+      }
+    });
+
+    editor.addEventListener("keyup", updateRteToolbarState);
+    editor.addEventListener("mouseup", updateRteToolbarState);
+  }
+
   // ---------- Modal ----------
   let editingCardId = null;
   let editingColId = null;
@@ -1481,7 +1541,7 @@
 
     document.getElementById("modalTitle").textContent = card ? "Edit card" : "New card";
     document.getElementById("cardTitle").value = card?.title || "";
-    document.getElementById("cardDesc").value = card?.description || "";
+    document.getElementById("cardDesc").innerHTML = descToHtml(card?.description || "");
     document.getElementById("cardPriority").value = card?.priority || "medium";
     document.getElementById("cardStart").value = card?.startDate ? toDateInput(card.startDate) : "";
     document.getElementById("cardDue").value = card?.dueDate ? toDateInput(card.dueDate) : "";
@@ -1570,7 +1630,7 @@
 
     const cardData = {
       title,
-      description: document.getElementById("cardDesc").value.trim(),
+      description: syncAndGetRteHtml(),
       priority: document.getElementById("cardPriority").value,
       cardType,
       parentId: cardType === 'project' ? null : parentId,
@@ -1855,6 +1915,9 @@ Guidelines:
         alert("Notifications are blocked. Please enable them in your browser settings.");
       }
     });
+
+    // Rich text editor
+    initRteEditor();
 
     // Modal
     document.getElementById("modalClose").addEventListener("click", closeModal);
