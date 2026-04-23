@@ -60,12 +60,25 @@
     try { localStorage.setItem(STORE_KEY, JSON.stringify(canvases)); } catch (_) {}
   }
 
+  function ensureCanvasForContext() {
+    const filtered = teamFilteredCanvases();
+    if (filtered.length) {
+      syncToState(filtered[0].id);
+    } else {
+      const teamId = window.datascope?.activeTeamId || null;
+      const id = uid();
+      canvases.push({ id, teamId, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 });
+      syncToState(id);
+    }
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORE_KEY);
       if (!raw) {
+        const teamId = window.datascope?.activeTeamId || null;
         const id = uid();
-        canvases = [{ id, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
+        canvases = [{ id, teamId, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
         currentId = id;
         return;
       }
@@ -74,16 +87,16 @@
         canvases = data;
       } else if (data && typeof data === "object") {
         const id = uid();
-        canvases = [{ id, name: "Untitled", shapes: data.shapes || [], arrows: data.arrows || [], pan: data.pan || { x: 0, y: 0 }, zoom: data.zoom || 1 }];
+        canvases = [{ id, teamId: null, name: "Untitled", shapes: data.shapes || [], arrows: data.arrows || [], pan: data.pan || { x: 0, y: 0 }, zoom: data.zoom || 1 }];
       }
       if (!canvases.length) {
         const id = uid();
-        canvases = [{ id, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
+        canvases = [{ id, teamId: null, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
       }
-      syncToState(canvases[0].id);
+      ensureCanvasForContext();
     } catch (_) {
       const id = uid();
-      canvases = [{ id, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
+      canvases = [{ id, teamId: null, name: "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 }];
       currentId = id;
     }
   }
@@ -92,7 +105,7 @@
   function createCanvas(name) {
     syncFromState();
     const id = uid();
-    canvases.push({ id, name: name || "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 });
+    canvases.push({ id, teamId: window.datascope?.activeTeamId || null, name: name || "Untitled", shapes: [], arrows: [], pan: { x: 0, y: 0 }, zoom: 1 });
     syncToState(id);
     updateZoomLabel();
     save();
@@ -128,11 +141,16 @@
     if (c) { c.name = name || "Untitled"; save(); buildCanvasBar(); }
   }
 
+  function teamFilteredCanvases() {
+    const teamId = window.datascope?.activeTeamId || null;
+    return canvases.filter(c => (c.teamId || null) === teamId);
+  }
+
   function buildCanvasBar() {
     const bar = document.getElementById("canvasBar");
     if (!bar) return;
     bar.innerHTML = "";
-    canvases.forEach(c => {
+    teamFilteredCanvases().forEach(c => {
       const tab = document.createElement("button");
       tab.className = "canvas-tab" + (c.id === currentId ? " active" : "");
       tab.type = "button";
@@ -140,7 +158,7 @@
       nameSpan.className = "canvas-tab-name";
       nameSpan.textContent = c.name;
       tab.appendChild(nameSpan);
-      if (canvases.length > 1) {
+      if (teamFilteredCanvases().length > 1) {
         const del = document.createElement("span");
         del.className = "canvas-tab-del";
         del.textContent = "×";
@@ -1073,6 +1091,14 @@
     resizeObserver.observe(viewport);
 
     draw();
+
+    document.addEventListener("datascope:teamchange", () => {
+      syncFromState();
+      ensureCanvasForContext();
+      updateZoomLabel();
+      buildCanvasBar();
+      draw();
+    });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

@@ -931,6 +931,11 @@
     });
   }
 
+  function teamFilteredCharts() {
+    const teamId = window.datascope?.activeTeamId || null;
+    return loadSavedCharts().filter(c => (c.teamId || null) === teamId);
+  }
+
   function saveChart() {
     const name = document.getElementById("chartName").value.trim();
     if (!name) {
@@ -940,6 +945,7 @@
     const charts = loadSavedCharts();
     const chartData = {
       id: uid(),
+      teamId: window.datascope?.activeTeamId || null,
       name,
       projectId: document.getElementById("chartProjectSelect").value || "",
       headers: [...state.headers],
@@ -1008,7 +1014,7 @@
     const grid = document.getElementById("chartLibrary");
     const empty = document.getElementById("libraryEmpty");
     if (!grid) return;
-    const charts = loadSavedCharts();
+    const charts = teamFilteredCharts();
     grid.innerHTML = "";
     empty.hidden = charts.length > 0;
 
@@ -1087,7 +1093,7 @@
   function renderSavedChartsSelect() {
     const sel = document.getElementById("savedChartsSelect");
     sel.innerHTML = '<option value="">Load saved chart\u2026</option>';
-    const charts = loadSavedCharts();
+    const charts = teamFilteredCharts();
     charts.forEach((c) => {
       const opt = document.createElement("option");
       opt.value = c.id;
@@ -1170,6 +1176,11 @@
     document.getElementById("saveChartBtn").addEventListener("click", saveChart);
     document.getElementById("savedChartsSelect").addEventListener("change", (e) => loadSavedChart(e.target.value));
     document.getElementById("deleteSavedChartBtn").addEventListener("click", deleteSavedChart);
+
+    document.addEventListener("datascope:teamchange", () => {
+      renderSavedChartsSelect();
+      renderChartLibrary();
+    });
 
     // Reset palette
     document.getElementById("resetColorsBtn").addEventListener("click", () => {

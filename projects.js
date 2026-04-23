@@ -60,11 +60,14 @@
 
   function getLinkedCards(projectId) {
     const data = loadStore(KANBAN_KEY);
-    if (!data || !Array.isArray(data.columns)) return [];
+    if (!data) return [];
     const cards = [];
-    data.columns.forEach((col) => {
-      (col.cards || []).forEach((card) => {
-        if (card.projectId === projectId) cards.push({ ...card, columnName: col.name });
+    const boards = Array.isArray(data) ? data : [data];
+    boards.forEach(board => {
+      (board.columns || []).forEach((col) => {
+        (col.cards || []).forEach((card) => {
+          if (card.projectId === projectId) cards.push({ ...card, columnName: col.title || col.name });
+        });
       });
     });
     return cards;
@@ -102,13 +105,16 @@
 
   function unlinkCard(cardId) {
     const data = loadStore(KANBAN_KEY);
-    if (!data || !Array.isArray(data.columns)) return;
-    data.columns.forEach((col) => {
-      (col.cards || []).forEach((card) => {
-        if (card.id === cardId) card.projectId = "";
+    if (!data) return;
+    const boards = Array.isArray(data) ? data : [data];
+    boards.forEach(board => {
+      (board.columns || []).forEach((col) => {
+        (col.cards || []).forEach((card) => {
+          if (card.id === cardId) card.projectId = "";
+        });
       });
     });
-    saveStore(KANBAN_KEY, data);
+    saveStore(KANBAN_KEY, Array.isArray(data) ? boards : boards[0]);
   }
 
   function unlinkNote(noteId) {
@@ -129,19 +135,25 @@
     }
   }
 
+  function teamFilteredProjects() {
+    const teamId = window.datascope?.activeTeamId || null;
+    return state.projects.filter(p => (p.teamId || null) === teamId);
+  }
+
   // ---------- Render ----------
   function render() {
     const grid = document.getElementById("projectsGrid");
     const empty = document.getElementById("emptyState");
     grid.innerHTML = "";
 
-    if (!state.projects.length) {
+    const projects = teamFilteredProjects();
+    if (!projects.length) {
       empty.hidden = false;
       return;
     }
     empty.hidden = true;
 
-    state.projects
+    projects
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
       .forEach((proj) => grid.appendChild(buildProjectCard(proj)));
   }
@@ -232,6 +244,7 @@
     } else {
       state.projects.push({
         id: uid(),
+        teamId: window.datascope?.activeTeamId || null,
         name,
         description,
         createdAt: now,
@@ -324,6 +337,8 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && !document.getElementById("modalOverlay").hidden) closeModal();
     });
+
+    document.addEventListener("datascope:teamchange", () => render());
   }
 
   if (document.readyState === "loading") {

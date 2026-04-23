@@ -415,10 +415,21 @@
     document.getElementById("slideCounter").textContent = `${state.currentSlide + 1} / ${currentSlides().length}`;
   }
 
+  function teamFilteredProjectIndices() {
+    const teamId = window.datascope?.activeTeamId || null;
+    const indices = [];
+    state.projects.forEach((proj, i) => {
+      if ((proj.teamId || null) === teamId) indices.push(i);
+    });
+    return indices;
+  }
+
   function renderProjectSelect() {
     const sel = document.getElementById("projectSelect");
     sel.innerHTML = "";
-    state.projects.forEach((proj, i) => {
+    const indices = teamFilteredProjectIndices();
+    indices.forEach(i => {
+      const proj = state.projects[i];
       const opt = document.createElement("option");
       opt.value = i;
       opt.textContent = proj.name;
@@ -433,13 +444,15 @@
     if (!container) return;
     container.innerHTML = "";
 
-    if (!state.projects.length) {
+    const indices = teamFilteredProjectIndices();
+    if (!indices.length) {
       if (empty) empty.hidden = false;
       return;
     }
     if (empty) empty.hidden = true;
 
-    state.projects.forEach((proj, idx) => {
+    indices.forEach(idx => {
+      const proj = state.projects[idx];
       const firstSlide = proj.slides && proj.slides[0];
       if (!firstSlide) return;
 
@@ -534,6 +547,7 @@
     if (!name) return;
     state.projects.push({
       id: uid(),
+      teamId: window.datascope?.activeTeamId || null,
       name,
       slides: [makeSlide("title")],
     });
@@ -1122,6 +1136,23 @@ Guidelines:
     document.getElementById("exportAllPngBtn").addEventListener("click", exportAllPng);
     document.getElementById("exportHtmlBtn").addEventListener("click", exportHtml);
     document.getElementById("printBtn").addEventListener("click", handlePrint);
+
+    document.addEventListener("datascope:teamchange", () => {
+      const indices = teamFilteredProjectIndices();
+      if (indices.length) {
+        state.currentProject = indices[0];
+      } else {
+        const teamId = window.datascope?.activeTeamId || null;
+        state.projects.push({
+          id: uid(), teamId, name: teamId ? "Team Deck" : "My Deck",
+          slides: [makeSlide("title")],
+        });
+        state.currentProject = state.projects.length - 1;
+      }
+      state.currentSlide = 0;
+      saveState();
+      renderAll();
+    });
   }
 
   if (document.readyState === "loading") {

@@ -59,7 +59,9 @@
 
   function filteredNotes() {
     const q = state.search.toLowerCase();
+    const teamId = window.datascope?.activeTeamId || null;
     return state.notes.filter((n) => {
+      if ((n.teamId || null) !== teamId) return false;
       if (state.activeTag && !(n.tags || []).includes(state.activeTag)) return false;
       if (!q) return true;
       return (
@@ -314,6 +316,7 @@
     } else {
       state.notes.unshift({
         id: uid(),
+        teamId: window.datascope?.activeTeamId || null,
         title,
         body,
         tags,
@@ -393,6 +396,8 @@
       textarea.style.height = "auto";
       textarea.style.height = Math.max(260, textarea.scrollHeight) + "px";
     });
+
+    document.addEventListener("datascope:teamchange", () => render());
   }
 
   if (document.readyState === "loading") {

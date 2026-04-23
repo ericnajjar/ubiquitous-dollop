@@ -204,18 +204,28 @@
   // ---------- Actions (write to localStorage) ----------
   function actionCreateCard(params) {
     const KANBAN_KEY = "datascope_kanban";
-    let state;
-    try { state = JSON.parse(localStorage.getItem(KANBAN_KEY)); } catch (_) {}
-    if (!state || !state.columns || !state.columns.length) {
-      state = { title: "My Board", columns: [
+    const teamId = window.datascope?.activeTeamId || null;
+    let boards;
+    try {
+      const raw = localStorage.getItem(KANBAN_KEY);
+      const data = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(data)) boards = data;
+      else if (data) boards = [{ ...data, id: data.id || uid(), teamId: null }];
+      else boards = [];
+    } catch (_) { boards = []; }
+
+    let board = boards.find(b => (b.teamId || null) === teamId);
+    if (!board || !board.columns || !board.columns.length) {
+      board = { id: uid(), teamId, boardTitle: teamId ? "Team Board" : "My Board", columns: [
         { id: uid(), title: "To Do", cards: [] },
         { id: uid(), title: "In Progress", cards: [] },
         { id: uid(), title: "Done", cards: [] },
       ]};
+      boards.push(board);
     }
     const colName = (params.column || "To Do").toLowerCase();
-    let col = state.columns.find((c) => c.title.toLowerCase() === colName);
-    if (!col) col = state.columns[0];
+    let col = board.columns.find((c) => c.title.toLowerCase() === colName);
+    if (!col) col = board.columns[0];
     const cards = Array.isArray(params.cards) ? params.cards : [params];
     const created = [];
     cards.forEach((p) => {
@@ -234,7 +244,7 @@
       col.cards.push(card);
       created.push(card.title);
     });
-    try { localStorage.setItem(KANBAN_KEY, JSON.stringify(state)); } catch (_) {}
+    try { localStorage.setItem(KANBAN_KEY, JSON.stringify(boards)); } catch (_) {}
     return { count: created.length, column: col.title, titles: created };
   }
 
@@ -312,9 +322,12 @@
           if (cur) ctx.currentDeck = { name: cur.name, slideCount: (cur.slides || []).length };
         }
       } else if (page === "board") {
-        const s = JSON.parse(localStorage.getItem("datascope_kanban") || "null");
+        const raw = JSON.parse(localStorage.getItem("datascope_kanban") || "null");
+        const teamId = window.datascope?.activeTeamId || null;
+        const boards = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+        const s = boards.find(b => (b.teamId || null) === teamId) || boards[0];
         if (s) {
-          ctx.boardTitle = s.title || "My Board";
+          ctx.boardTitle = s.boardTitle || s.title || "My Board";
           const now = new Date();
           ctx.columns = (s.columns || []).map((c) => ({
             name: c.title, cardCount: (c.cards || []).length,

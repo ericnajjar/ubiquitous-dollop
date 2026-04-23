@@ -162,6 +162,8 @@
       input.value = '';
       document.getElementById('acctCreateForm').hidden = true;
       await loadTeams();
+      await ds.loadUserTeams();
+      refreshTeamSelect();
     } catch (e) {
       err.textContent = e.message;
       err.classList.add('error');
@@ -179,24 +181,58 @@
       input.value = '';
       document.getElementById('acctJoinForm').hidden = true;
       await loadTeams();
+      await ds.loadUserTeams();
+      refreshTeamSelect();
     } catch (e) {
       err.textContent = e.message || 'Invalid invite code';
       err.classList.add('error');
     }
   }
 
+  function buildTeamSelect() {
+    const sel = document.createElement('select');
+    sel.className = 'team-context-select';
+    sel.innerHTML = '<option value="">Personal</option>';
+    (ds.userTeams || []).forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.name;
+      if (t.id === ds.activeTeamId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (!ds.activeTeamId) sel.value = '';
+    sel.addEventListener('change', () => {
+      const opt = sel.options[sel.selectedIndex];
+      ds.setTeamContext(sel.value || null, opt.textContent);
+    });
+    return sel;
+  }
+
+  function refreshTeamSelect() {
+    const wrap = document.querySelector('.account-icon-wrap');
+    if (!wrap) return;
+    const old = wrap.querySelector('.team-context-select');
+    const sel = buildTeamSelect();
+    if (old) old.replaceWith(sel);
+    else wrap.insertBefore(sel, wrap.firstChild);
+  }
+
   function init() {
     const nav = document.querySelector('.site-nav');
     if (!nav) return;
 
-    getSession().then(session => {
+    getSession().then(async session => {
       if (!session) return;
       const email = session.user.email;
       const profile = getProfile();
 
+      await ds.loadUserTeams();
+
+      const teamSelect = buildTeamSelect();
       const iconBtn = buildIcon(email, profile);
       const wrap = document.createElement('div');
       wrap.className = 'account-icon-wrap';
+      wrap.appendChild(teamSelect);
       wrap.appendChild(iconBtn);
       nav.parentElement.appendChild(wrap);
 
@@ -262,6 +298,8 @@
       });
 
       document.getElementById('accountSignOut').addEventListener('click', () => ds.signOut());
+
+      document.addEventListener('datascope:teamchange', () => refreshTeamSelect());
     });
   }
 

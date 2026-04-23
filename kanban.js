@@ -4,37 +4,58 @@
   const STORE_KEY = "datascope_kanban";
   const API_KEY_STORE = "datascope_anthropic_key";
 
-  function load() {
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (_) {}
-    return null;
-  }
-
-  function save() {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(state));
-    } catch (_) {}
-  }
-
-  // ---------- Default state ----------
-  function defaultState() {
-    return {
-      boardTitle: "My Board",
-      columns: [
-        { id: uid(), title: "To Do", cards: [] },
-        { id: uid(), title: "In Progress", cards: [] },
-        { id: uid(), title: "Done", cards: [] },
-      ],
-    };
-  }
-
   function uid() {
     return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   }
 
-  const state = load() || defaultState();
+  function defaultColumns() {
+    return [
+      { id: uid(), title: "To Do", cards: [] },
+      { id: uid(), title: "In Progress", cards: [] },
+      { id: uid(), title: "Done", cards: [] },
+    ];
+  }
+
+  function defaultBoard(teamId) {
+    return {
+      id: uid(),
+      teamId: teamId || null,
+      boardTitle: teamId ? "Team Board" : "My Board",
+      columns: defaultColumns(),
+    };
+  }
+
+  function loadBoards() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) return data;
+      return [{ ...data, id: data.id || uid(), teamId: null }];
+    } catch (_) {}
+    return null;
+  }
+
+  let boards = loadBoards() || [defaultBoard(null)];
+
+  function getActiveBoard() {
+    const ds = window.datascope;
+    const teamId = ds?.activeTeamId || null;
+    let board = boards.find(b => (b.teamId || null) === teamId);
+    if (!board) {
+      board = defaultBoard(teamId);
+      boards.push(board);
+    }
+    return board;
+  }
+
+  let state = getActiveBoard();
+
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(boards));
+    } catch (_) {}
+  }
 
   // ---------- Countdown helpers ----------
   function formatCountdown(dateStr) {
@@ -1471,6 +1492,13 @@ Guidelines:
     }, 30000);
 
     checkReminders();
+
+    // Team context switch
+    document.addEventListener("datascope:teamchange", () => {
+      state = getActiveBoard();
+      titleEl.textContent = state.boardTitle;
+      renderAll();
+    });
   }
 
   if (document.readyState === "loading") {

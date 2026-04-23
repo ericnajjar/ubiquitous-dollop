@@ -1,5 +1,20 @@
+/* Team context selector */
+.account-icon-wrap { margin-left: 16px; display: flex; align-items: center; gap: 10px; }
+.team-context-select {
+  font: inherit; font-size: 12px; font-weight: 600; color: #e7ecff;
+  background: #1a2240; border: 1px solid rgba(110,168,255,.2);
+  border-radius: 8px; padding: 6px 28px 6px 10px;
+  cursor: pointer; outline: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239aa4c7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center;
+  transition: border-color .2s, background .15s;
+  max-width: 150px; text-overflow: ellipsis;
+}
+.team-context-select:hover { border-color: #6ea8ff; }
+.team-context-select:focus { border-color: #6ea8ff; box-shadow: 0 0 0 2px rgba(110,168,255,.15); }
+.team-context-select option { background: #161d3d; color: #e7ecff; }
+
 /* Account icon button */
-.account-icon-wrap { margin-left: 16px; }
 .account-icon-btn {
   width: 36px; height: 36px; border-radius: 50%;
   border: 2px solid rgba(110,168,255,.3);

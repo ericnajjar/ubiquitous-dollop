@@ -36,16 +36,22 @@
     return state.docs.find((d) => d.id === state.currentDocId) || null;
   }
 
+  function teamFilteredDocs() {
+    const teamId = window.datascope?.activeTeamId || null;
+    return state.docs.filter(d => (d.teamId || null) === teamId);
+  }
+
   // ---------- Sidebar ----------
   function renderSidebar() {
     const list = document.getElementById("docList");
     const empty = document.getElementById("docListEmpty");
     list.innerHTML = "";
 
-    if (!state.docs.length) { empty.hidden = false; return; }
+    const docs = teamFilteredDocs();
+    if (!docs.length) { empty.hidden = false; return; }
     empty.hidden = true;
 
-    state.docs.forEach((doc) => {
+    docs.forEach((doc) => {
       const li = document.createElement("li");
       li.className = "doc-item" + (doc.id === state.currentDocId ? " active" : "");
       li.innerHTML = `
@@ -911,6 +917,7 @@
   function createDoc() {
     const doc = {
       id: uid(),
+      teamId: window.datascope?.activeTeamId || null,
       title: "Untitled Document",
       body: "",
       tasks: [],
@@ -972,27 +979,44 @@
   function loadKanbanColumns() {
     try {
       const raw = localStorage.getItem("datascope_kanban");
-      if (raw) return JSON.parse(raw).columns || [];
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        const teamId = window.datascope?.activeTeamId || null;
+        const board = data.find(b => (b.teamId || null) === teamId);
+        return board ? board.columns || [] : [];
+      }
+      return data.columns || [];
     } catch (_) {}
     return [];
   }
 
   function pushStoryToBoard(story, colId, pushBtn) {
     const KANBAN_KEY = "datascope_kanban";
-    let kanban;
-    try { kanban = JSON.parse(localStorage.getItem(KANBAN_KEY)); } catch (_) {}
-    if (!kanban) {
-      kanban = {
-        title: "My Board",
+    const teamId = window.datascope?.activeTeamId || null;
+    let boards;
+    try {
+      const raw = localStorage.getItem(KANBAN_KEY);
+      const data = raw ? JSON.parse(raw) : null;
+      if (Array.isArray(data)) boards = data;
+      else if (data) boards = [{ ...data, id: data.id || uidLocal(), teamId: null }];
+      else boards = [];
+    } catch (_) { boards = []; }
+
+    let board = boards.find(b => (b.teamId || null) === teamId);
+    if (!board) {
+      board = {
+        id: uidLocal(), teamId, boardTitle: teamId ? "Team Board" : "My Board",
         columns: [
           { id: uidLocal(), title: "To Do", cards: [] },
           { id: uidLocal(), title: "In Progress", cards: [] },
           { id: uidLocal(), title: "Done", cards: [] },
         ],
       };
+      boards.push(board);
     }
 
-    const col = kanban.columns.find((c) => c.id === colId) || kanban.columns[0];
+    const col = board.columns.find((c) => c.id === colId) || board.columns[0];
     if (!col) return;
 
     const doc = currentDoc();
@@ -1014,7 +1038,7 @@
       createdAt: new Date().toISOString(),
     });
 
-    try { localStorage.setItem(KANBAN_KEY, JSON.stringify(kanban)); } catch (_) {}
+    try { localStorage.setItem(KANBAN_KEY, JSON.stringify(boards)); } catch (_) {}
 
     pushBtn.textContent = "✓ Added to Board";
     pushBtn.disabled = true;
@@ -1090,6 +1114,13 @@
       if (!doc) return;
       doc.projectId = document.getElementById("docProject").value;
       saveDocs();
+    });
+
+    document.addEventListener("datascope:teamchange", () => {
+      const docs = teamFilteredDocs();
+      state.currentDocId = docs.length ? docs[0].id : null;
+      renderSidebar();
+      renderEditor();
     });
   }
 
