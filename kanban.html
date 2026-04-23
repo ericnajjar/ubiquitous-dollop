@@ -74,8 +74,8 @@
           <input type="text" id="cardTitle" placeholder="Card title" autocomplete="off" />
         </div>
         <div class="field">
-          <label for="cardDesc">Description</label>
-          <textarea id="cardDesc" rows="4" placeholder="Add details…"></textarea>
+          <label for="cardDesc">Description <span class="field-hint">(use [ ] for checkboxes)</span></label>
+          <textarea id="cardDesc" rows="6" placeholder="Add details…&#10;[ ] Unchecked task&#10;[x] Completed task"></textarea>
         </div>
         <div class="field-row">
           <div class="field">
@@ -135,6 +135,14 @@
         </div>
         <div class="field-row">
           <div class="field team-move-wrap" id="cardMoveWrap"></div>
+        </div>
+        <div class="field" id="commentsField">
+          <label>Comments</label>
+          <div class="comments-list" id="commentsList"></div>
+          <div class="comment-input-row">
+            <textarea id="commentInput" rows="2" placeholder="Add a comment…"></textarea>
+            <button type="button" class="btn btn-ghost btn-sm" id="addCommentBtn">Post</button>
+          </div>
         </div>
         <div class="attach-sections" id="attachSections"></div>
       </div>

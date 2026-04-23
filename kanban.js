@@ -500,9 +500,58 @@
     el.appendChild(title);
 
     if (card.description) {
-      const desc = document.createElement("p");
+      const desc = document.createElement("div");
       desc.className = "card-desc";
-      desc.textContent = card.description;
+      const lines = card.description.split('\n');
+      const checkRe = /^\[([ xX])\]\s*(.*)/;
+      let totalChecks = 0, doneChecks = 0;
+      lines.forEach((line, lineIdx) => {
+        const m = line.match(checkRe);
+        if (m) {
+          totalChecks++;
+          const checked = m[1] !== ' ';
+          if (checked) doneChecks++;
+          const wrap = document.createElement('label');
+          wrap.className = 'card-desc-check';
+          const cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = checked;
+          cb.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const newLines = card.description.split('\n');
+            newLines[lineIdx] = cb.checked ? '[x] ' + m[2] : '[ ] ' + m[2];
+            card.description = newLines.join('\n');
+            save();
+            renderAll();
+          });
+          const span = document.createElement('span');
+          span.textContent = m[2];
+          if (checked) span.className = 'checked-text';
+          wrap.appendChild(cb);
+          wrap.appendChild(span);
+          desc.appendChild(wrap);
+        } else if (line.trim()) {
+          const p = document.createElement('p');
+          p.className = 'card-desc-line';
+          p.textContent = line;
+          desc.appendChild(p);
+        }
+      });
+      if (totalChecks > 0) {
+        const prog = document.createElement('div');
+        prog.className = 'card-desc-progress';
+        const barOuter = document.createElement('div');
+        barOuter.className = 'card-desc-progress-bar';
+        const barFill = document.createElement('div');
+        barFill.className = 'card-desc-progress-fill';
+        barFill.style.width = Math.round((doneChecks / totalChecks) * 100) + '%';
+        barOuter.appendChild(barFill);
+        prog.appendChild(barOuter);
+        const label = document.createElement('span');
+        label.textContent = doneChecks + '/' + totalChecks;
+        prog.appendChild(label);
+        desc.appendChild(prog);
+      }
       el.appendChild(desc);
     }
 
@@ -615,6 +664,13 @@
         acc.appendChild(accBody);
         el.appendChild(acc);
       }
+    }
+
+    if (card.comments?.length) {
+      const cSum = document.createElement('div');
+      cSum.className = 'card-comments-summary';
+      cSum.textContent = '💬 ' + card.comments.length + ' comment' + (card.comments.length !== 1 ? 's' : '');
+      el.appendChild(cSum);
     }
 
     // Footer: countdown + edit
@@ -1006,6 +1062,52 @@
   let editingCardId = null;
   let editingColId = null;
   let modalAttachments = { canvases: [], charts: [], decks: [] };
+  let modalComments = [];
+
+  function renderModalComments() {
+    const list = document.getElementById("commentsList");
+    if (!list) return;
+    list.innerHTML = "";
+    modalComments.forEach((c, idx) => {
+      const bubble = document.createElement("div");
+      bubble.className = "comment-bubble";
+      const meta = document.createElement("div");
+      meta.className = "comment-meta";
+      const time = document.createElement("span");
+      time.className = "comment-time";
+      time.textContent = formatCommentTime(c.createdAt);
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "comment-delete";
+      del.textContent = "×";
+      del.title = "Delete comment";
+      del.addEventListener("click", () => { modalComments.splice(idx, 1); renderModalComments(); });
+      meta.appendChild(time);
+      meta.appendChild(del);
+      const text = document.createElement("div");
+      text.className = "comment-text";
+      text.textContent = c.text;
+      bubble.appendChild(meta);
+      bubble.appendChild(text);
+      list.appendChild(bubble);
+    });
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function formatCommentTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = now - d;
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m ago";
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return days + "d ago";
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
 
   function loadAvailableCanvases() {
     try {
@@ -1419,6 +1521,27 @@
     modalAttachments = JSON.parse(JSON.stringify(card?.attachments || { canvases: [], charts: [], decks: [] }));
     buildAttachSections();
 
+    modalComments = JSON.parse(JSON.stringify(card?.comments || []));
+    renderModalComments();
+
+    document.getElementById("addCommentBtn").onclick = () => {
+      const input = document.getElementById("commentInput");
+      const text = input.value.trim();
+      if (!text) return;
+      modalComments.push({ id: uid(), text, createdAt: new Date().toISOString() });
+      input.value = "";
+      renderModalComments();
+    };
+
+    document.getElementById("commentInput").onkeydown = (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById("addCommentBtn").click();
+      }
+    };
+
+    document.getElementById("commentsField").hidden = !card;
+
     document.getElementById("modalOverlay").hidden = false;
     document.getElementById("cardTitle").focus();
   }
@@ -1457,6 +1580,7 @@
       tags,
       projectId: document.getElementById("cardProject").value || "",
       attachments: JSON.parse(JSON.stringify(modalAttachments)),
+      comments: JSON.parse(JSON.stringify(modalComments)),
     };
 
     const movingToOtherBoard = (targetTeamId || null) !== (state.teamId || null);
