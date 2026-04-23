@@ -40,15 +40,23 @@
         <button class="tool-btn active" data-tool="select" title="Select & Move (V)">
           <svg viewBox="0 0 20 20" fill="none"><path d="M4 2 L4 16 L8 12 L12 18 L14 17 L10 11 L15 11 Z" fill="currentColor"/></svg>
         </button>
-        <button class="tool-btn" data-tool="rect" title="Rectangle (R)">
-          <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
-        </button>
-        <button class="tool-btn" data-tool="circle" title="Circle (C)">
-          <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
-        </button>
-        <button class="tool-btn" data-tool="diamond" title="Diamond (D)">
-          <svg viewBox="0 0 20 20" fill="none"><path d="M10 2 L18 10 L10 18 L2 10 Z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
-        </button>
+        <div class="shape-tool-wrap" id="shapeToolWrap">
+          <button class="tool-btn" id="shapeBtn" data-tool="shape" title="Shape (S)">
+            <svg id="shapeBtnIcon" viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            <span class="shape-caret">▾</span>
+          </button>
+          <div class="shape-flyout" id="shapeFlyout" hidden>
+            <button class="shape-flyout-btn active" data-shape="rect" title="Rectangle">
+              <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+            <button class="shape-flyout-btn" data-shape="circle" title="Circle">
+              <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+            <button class="shape-flyout-btn" data-shape="diamond" title="Diamond">
+              <svg viewBox="0 0 20 20" fill="none"><path d="M10 2 L18 10 L10 18 L2 10 Z" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+            </button>
+          </div>
+        </div>
         <button class="tool-btn" data-tool="text" title="Text (T)">
           <svg viewBox="0 0 20 20" fill="none"><text x="4" y="15" font-size="14" font-weight="700" fill="currentColor">T</text></svg>
         </button>
@@ -68,6 +76,10 @@
         <div class="tool-field">
           <label>Stroke</label>
           <input type="color" id="strokeColor" value="#6ea8ff" />
+        </div>
+        <div class="tool-field">
+          <label>Text</label>
+          <input type="color" id="textColor" value="#e7ecff" />
         </div>
         <div class="tool-field">
           <label>Width</label>

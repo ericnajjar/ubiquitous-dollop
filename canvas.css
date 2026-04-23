@@ -85,6 +85,31 @@ a { color: inherit; text-decoration: none; }
   color: var(--accent);
 }
 
+/* Shape flyout */
+.shape-tool-wrap { position: relative; }
+.shape-caret {
+  position: absolute; bottom: 2px; right: 3px;
+  font-size: 8px; line-height: 1; color: var(--muted); pointer-events: none;
+}
+.shape-flyout {
+  position: absolute; left: 100%; top: 0; margin-left: 4px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px; z-index: 30;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+.shape-flyout[hidden] { display: none; }
+.shape-flyout-btn {
+  width: 34px; height: 34px; border-radius: 6px;
+  border: 1px solid transparent; background: transparent;
+  color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
+}
+.shape-flyout-btn svg { width: 16px; height: 16px; }
+.shape-flyout-btn:hover { background: rgba(110,168,255,.12); color: var(--text); }
+.shape-flyout-btn.active { color: var(--accent); border-color: var(--accent); background: rgba(110,168,255,.1); }
+
 .tool-divider {
   width: 28px;
   height: 1px;

@@ -4,14 +4,23 @@
   const MIN_SHAPE_SIZE = 20;
 
   // ---------- State ----------
+  const SHAPE_ICONS = {
+    rect: '<rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+    circle: '<circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+    diamond: '<path d="M10 2 L18 10 L10 18 L2 10 Z" stroke="currentColor" stroke-width="1.5" fill="none"/>',
+  };
+
   const state = {
     shapes: [],
     arrows: [],
     tool: "select",
+    currentShape: "rect",
     fillColor: "#1d254a",
     strokeColor: "#6ea8ff",
+    textColor: "#e7ecff",
     strokeWidth: 1.5,
     selected: new Set(),
+    selectedArrows: new Set(),
     pan: { x: 0, y: 0 },
     zoom: 1,
   };
@@ -22,16 +31,19 @@
   let dragging = false;
   let dragStart = { x: 0, y: 0 };
   let dragOffset = { x: 0, y: 0 };
-  let creating = null; // { type, startX, startY }
-  let arrowStart = null; // shape id for arrow source
+  let creating = null;
+  let arrowStart = null;
   let panning = false;
   let panLast = { x: 0, y: 0 };
   let snapGuides = [];
   let marquee = null;
   let dragShapeStarts = {};
   let resizing = null;
+  let arrowEndpointDrag = null; // { arrowId, endpoint: "from"|"to", x, y }
+  let arrowBodyDrag = null; // { arrowId, startX, startY, origX1, origY1, origX2, origY2 }
   const SNAP_THRESHOLD = 8;
   const HANDLE_SIZE = 8;
+  const ARROW_HIT_DIST = 8;
 
   let canvas, ctx;
 
@@ -334,6 +346,64 @@
     return false;
   }
 
+  // ---------- Arrow hit testing ----------
+  function getArrowPoints(a) {
+    const from = a.from ? state.shapes.find(s => s.id === a.from) : null;
+    const to = a.to ? state.shapes.find(s => s.id === a.to) : null;
+    let p1, p2;
+    if (from && to) {
+      const fc = shapeCenter(from), tc = shapeCenter(to);
+      const angle = Math.atan2(tc.y - fc.y, tc.x - fc.x);
+      p1 = shapeBorderPoint(from, angle);
+      p2 = shapeBorderPoint(to, angle + Math.PI);
+    } else if (from) {
+      p2 = { x: a.x2, y: a.y2 };
+      const fc = shapeCenter(from);
+      const angle = Math.atan2(p2.y - fc.y, p2.x - fc.x);
+      p1 = shapeBorderPoint(from, angle);
+    } else if (to) {
+      p1 = { x: a.x1, y: a.y1 };
+      const tc = shapeCenter(to);
+      const angle = Math.atan2(p1.y - tc.y, p1.x - tc.x);
+      p2 = shapeBorderPoint(to, angle);
+    } else {
+      p1 = { x: a.x1 || 0, y: a.y1 || 0 };
+      p2 = { x: a.x2 || 0, y: a.y2 || 0 };
+    }
+    return { p1, p2 };
+  }
+
+  function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+    let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  function hitTestArrow(wx, wy) {
+    const threshold = ARROW_HIT_DIST / state.zoom;
+    for (let i = state.arrows.length - 1; i >= 0; i--) {
+      const a = state.arrows[i];
+      const { p1, p2 } = getArrowPoints(a);
+      if (pointToSegmentDist(wx, wy, p1.x, p1.y, p2.x, p2.y) <= threshold) return a;
+    }
+    return null;
+  }
+
+  function hitTestArrowHandle(wx, wy) {
+    if (state.selectedArrows.size !== 1) return null;
+    const aId = [...state.selectedArrows][0];
+    const a = state.arrows.find(ar => ar.id === aId);
+    if (!a) return null;
+    const { p1, p2 } = getArrowPoints(a);
+    const hs = (HANDLE_SIZE + 6) / state.zoom;
+    if (Math.hypot(wx - p1.x, wy - p1.y) <= hs) return { arrowId: a.id, endpoint: "from" };
+    if (Math.hypot(wx - p2.x, wy - p2.y) <= hs) return { arrowId: a.id, endpoint: "to" };
+    return null;
+  }
+
   function shapeCenter(s) {
     return { x: s.x + s.w / 2, y: s.y + s.h / 2 };
   }
@@ -369,10 +439,8 @@
 
     // Arrows
     state.arrows.forEach((a) => {
-      const from = state.shapes.find((s) => s.id === a.from);
-      const to = state.shapes.find((s) => s.id === a.to);
-      if (!from || !to) return;
-      drawArrow(from, to, a.color || "#6ea8ff");
+      const selected = state.selectedArrows.has(a.id);
+      drawArrowFull(a, selected);
     });
 
     // Arrow preview while creating
@@ -398,6 +466,25 @@
     if (state.selected.size === 1) {
       const sel = state.shapes.find((s) => state.selected.has(s.id));
       if (sel) drawHandles(sel);
+    }
+
+    // Arrow endpoint handles
+    if (state.selectedArrows.size === 1) {
+      const aId = [...state.selectedArrows][0];
+      const a = state.arrows.find(ar => ar.id === aId);
+      if (a) {
+        const { p1, p2 } = getArrowPoints(a);
+        const hs = HANDLE_SIZE / state.zoom;
+        ctx.fillStyle = "#fbbf24";
+        ctx.strokeStyle = "#0b1020";
+        ctx.lineWidth = 1.5 / state.zoom;
+        [p1, p2].forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, hs / 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        });
+      }
     }
 
     // Creation preview
@@ -501,14 +588,48 @@
     ctx.setLineDash([]);
   }
 
+  function drawArrowFull(a, selected) {
+    const { p1, p2 } = getArrowPoints(a);
+    if (!p1 || !p2) return;
+    const color = selected ? "#fbbf24" : (a.color || "#6ea8ff");
+
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = selected ? 3 : 2;
+    ctx.stroke();
+
+    const headLen = 10;
+    const a1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+    ctx.beginPath();
+    ctx.moveTo(p2.x, p2.y);
+    ctx.lineTo(p2.x - headLen * Math.cos(a1 - 0.4), p2.y - headLen * Math.sin(a1 - 0.4));
+    ctx.moveTo(p2.x, p2.y);
+    ctx.lineTo(p2.x - headLen * Math.cos(a1 + 0.4), p2.y - headLen * Math.sin(a1 + 0.4));
+    ctx.stroke();
+
+    if (a.label) {
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      ctx.save();
+      ctx.font = "12px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const tw = ctx.measureText(a.label).width + 12;
+      ctx.fillStyle = "rgba(11, 16, 32, 0.85)";
+      ctx.fillRect(mx - tw / 2, my - 10, tw, 20);
+      ctx.fillStyle = a.labelColor || "#e7ecff";
+      ctx.fillText(a.label, mx, my);
+      ctx.restore();
+    }
+  }
+
   function drawArrow(from, to, color) {
     const fc = shapeCenter(from);
     const tc = shapeCenter(to);
     const angle = Math.atan2(tc.y - fc.y, tc.x - fc.x);
-    const reverseAngle = angle + Math.PI;
-
     const start = shapeBorderPoint(from, angle);
-    const end = shapeBorderPoint(to, reverseAngle);
+    const end = shapeBorderPoint(to, angle + Math.PI);
 
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
@@ -517,7 +638,6 @@
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Arrowhead
     const headLen = 10;
     const a1 = Math.atan2(end.y - start.y, end.x - start.x);
     ctx.beginPath();
@@ -605,14 +725,28 @@
 
   // ---------- Tool management ----------
   function setTool(tool) {
+    if (tool === "shape") tool = state.currentShape;
     state.tool = tool;
     document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.tool === tool);
+      const match = btn.dataset.tool === tool || (btn.dataset.tool === "shape" && ["rect", "circle", "diamond"].includes(tool));
+      btn.classList.toggle("active", match);
     });
     const viewport = document.getElementById("viewport");
     if (tool === "select") viewport.style.cursor = "default";
     else if (tool === "hand") viewport.style.cursor = "grab";
     else viewport.style.cursor = "crosshair";
+  }
+
+  function setCurrentShape(shape) {
+    state.currentShape = shape;
+    const icon = document.getElementById("shapeBtnIcon");
+    if (icon) icon.innerHTML = SHAPE_ICONS[shape] || SHAPE_ICONS.rect;
+    document.querySelectorAll(".shape-flyout-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.shape === shape);
+    });
+    const flyout = document.getElementById("shapeFlyout");
+    if (flyout) flyout.hidden = true;
+    setTool(shape);
   }
 
   // ---------- Mouse events ----------
@@ -641,6 +775,19 @@
     const world = screenToWorld(pos.x, pos.y);
 
     if (state.tool === "select") {
+      // 1. Arrow endpoint handles
+      const arrowHandle = hitTestArrowHandle(world.x, world.y);
+      if (arrowHandle) {
+        const a = state.arrows.find(ar => ar.id === arrowHandle.arrowId);
+        if (a) {
+          const { p1, p2 } = getArrowPoints(a);
+          const pt = arrowHandle.endpoint === "from" ? p1 : p2;
+          arrowEndpointDrag = { arrowId: a.id, endpoint: arrowHandle.endpoint, x: pt.x, y: pt.y };
+          return;
+        }
+      }
+
+      // 2. Shape resize handles
       const handleHit = hitTestHandle(world.x, world.y);
       if (handleHit) {
         const s = state.shapes.find((sh) => sh.id === handleHit.shapeId);
@@ -658,6 +805,30 @@
         }
       }
 
+      // 3. Arrow body hit
+      const arrowHit = hitTestArrow(world.x, world.y);
+      if (arrowHit) {
+        if (e.metaKey || e.ctrlKey) {
+          const ns = new Set(state.selectedArrows);
+          if (ns.has(arrowHit.id)) ns.delete(arrowHit.id); else ns.add(arrowHit.id);
+          state.selectedArrows = ns;
+        } else {
+          state.selectedArrows = new Set([arrowHit.id]);
+        }
+        state.selected = new Set();
+        const { p1, p2 } = getArrowPoints(arrowHit);
+        arrowBodyDrag = {
+          arrowId: arrowHit.id,
+          startX: world.x, startY: world.y,
+          origFrom: arrowHit.from, origTo: arrowHit.to,
+          origX1: p1.x, origY1: p1.y,
+          origX2: p2.x, origY2: p2.y,
+        };
+        draw();
+        return;
+      }
+
+      // 4. Shape hit
       const hit = hitTest(world.x, world.y);
       if (hit) {
         if (e.metaKey || e.ctrlKey) {
@@ -667,6 +838,7 @@
         } else if (!state.selected.has(hit.id)) {
           state.selected = new Set([hit.id]);
         }
+        state.selectedArrows = new Set();
         dragging = true;
         dragStart = { x: world.x, y: world.y };
         dragShapeStarts = {};
@@ -675,7 +847,10 @@
           if (s) dragShapeStarts[id] = { x: s.x, y: s.y };
         }
       } else {
-        if (!(e.metaKey || e.ctrlKey)) state.selected = new Set();
+        if (!(e.metaKey || e.ctrlKey)) {
+          state.selected = new Set();
+          state.selectedArrows = new Set();
+        }
         marquee = { startX: world.x, startY: world.y, w: 0, h: 0 };
       }
       draw();
@@ -706,6 +881,39 @@
     const pos = getCanvasPos(e);
     const world = screenToWorld(pos.x, pos.y);
 
+    if (arrowEndpointDrag) {
+      arrowEndpointDrag.x = world.x;
+      arrowEndpointDrag.y = world.y;
+      const a = state.arrows.find(ar => ar.id === arrowEndpointDrag.arrowId);
+      if (a) {
+        if (arrowEndpointDrag.endpoint === "from") {
+          a.from = null;
+          a.x1 = world.x; a.y1 = world.y;
+        } else {
+          a.to = null;
+          a.x2 = world.x; a.y2 = world.y;
+        }
+      }
+      draw();
+      return;
+    }
+
+    if (arrowBodyDrag) {
+      const dx = world.x - arrowBodyDrag.startX;
+      const dy = world.y - arrowBodyDrag.startY;
+      const a = state.arrows.find(ar => ar.id === arrowBodyDrag.arrowId);
+      if (a) {
+        a.from = null;
+        a.to = null;
+        a.x1 = arrowBodyDrag.origX1 + dx;
+        a.y1 = arrowBodyDrag.origY1 + dy;
+        a.x2 = arrowBodyDrag.origX2 + dx;
+        a.y2 = arrowBodyDrag.origY2 + dy;
+      }
+      draw();
+      return;
+    }
+
     if (resizing) {
       const s = state.shapes.find((sh) => sh.id === resizing.shapeId);
       if (s) {
@@ -723,6 +931,23 @@
         if (right)  { nw += dx; }
         if (top)    { ny += dy; nh -= dy; }
         if (bottom) { nh += dy; }
+
+        if (e.metaKey || e.ctrlKey) {
+          const aspect = resizing.origW / resizing.origH;
+          const isCorner = (h === "tl" || h === "tr" || h === "bl" || h === "br");
+          if (isCorner) {
+            const avgDim = (Math.abs(nw) + Math.abs(nh) * aspect) / 2;
+            nw = avgDim; nh = avgDim / aspect;
+            if (left) nx = resizing.origX + resizing.origW - nw;
+            if (top) ny = resizing.origY + resizing.origH - nh;
+          } else if (h === "t" || h === "b") {
+            nw = nh * aspect;
+            nx = resizing.origX + (resizing.origW - nw) / 2;
+          } else {
+            nh = nw / aspect;
+            ny = resizing.origY + (resizing.origH - nh) / 2;
+          }
+        }
 
         if (nw < MIN_SHAPE_SIZE) {
           if (left) nx = resizing.origX + resizing.origW - MIN_SHAPE_SIZE;
@@ -765,8 +990,18 @@
       }
       draw();
     } else if (state.tool === "select") {
+      const ah = hitTestArrowHandle(world.x, world.y);
+      if (ah) {
+        document.getElementById("viewport").style.cursor = "crosshair";
+        return;
+      }
       const hh = hitTestHandle(world.x, world.y);
-      document.getElementById("viewport").style.cursor = hh ? handleCursor(hh.handle) : "default";
+      if (hh) {
+        document.getElementById("viewport").style.cursor = handleCursor(hh.handle);
+        return;
+      }
+      const arrowHover = hitTestArrow(world.x, world.y);
+      document.getElementById("viewport").style.cursor = arrowHover ? "pointer" : "default";
     }
   }
 
@@ -775,6 +1010,40 @@
       panning = false;
       if (state.tool === "hand") document.getElementById("viewport").style.cursor = "grab";
       save();
+      return;
+    }
+
+    if (arrowEndpointDrag) {
+      const a = state.arrows.find(ar => ar.id === arrowEndpointDrag.arrowId);
+      if (a) {
+        const hit = hitTest(arrowEndpointDrag.x, arrowEndpointDrag.y);
+        if (hit) {
+          if (arrowEndpointDrag.endpoint === "from") {
+            a.from = hit.id;
+            delete a.x1; delete a.y1;
+          } else {
+            a.to = hit.id;
+            delete a.x2; delete a.y2;
+          }
+        }
+      }
+      arrowEndpointDrag = null;
+      save();
+      draw();
+      return;
+    }
+
+    if (arrowBodyDrag) {
+      const a = state.arrows.find(ar => ar.id === arrowBodyDrag.arrowId);
+      if (a) {
+        const hitFrom = hitTest(a.x1, a.y1);
+        const hitTo = hitTest(a.x2, a.y2);
+        if (hitFrom) { a.from = hitFrom.id; delete a.x1; delete a.y1; }
+        if (hitTo) { a.to = hitTo.id; delete a.x2; delete a.y2; }
+      }
+      arrowBodyDrag = null;
+      save();
+      draw();
       return;
     }
 
@@ -848,7 +1117,7 @@
           stroke: state.strokeColor,
           strokeWidth: state.strokeWidth,
           label: "",
-          textColor: "#e7ecff",
+          textColor: state.textColor,
           fontSize: 14,
         };
         state.shapes.push(shape);
@@ -868,7 +1137,7 @@
         stroke: state.strokeColor,
         strokeWidth: state.strokeWidth,
         label: "",
-        textColor: "#e7ecff",
+        textColor: state.textColor,
         fontSize: 14,
       };
       state.shapes.push(shape);
@@ -888,7 +1157,46 @@
       state.selected = new Set([hit.id]);
       draw();
       openTextEditor(hit);
+      return;
     }
+    const arrowHit = hitTestArrow(world.x, world.y);
+    if (arrowHit) {
+      state.selectedArrows = new Set([arrowHit.id]);
+      draw();
+      openArrowLabelEditor(arrowHit);
+    }
+  }
+
+  function openArrowLabelEditor(arrow) {
+    const { p1, p2 } = getArrowPoints(arrow);
+    const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+    const screen = worldToScreen(mx, my);
+    const editor = document.getElementById("textEditor");
+    const edW = 160, edH = 30;
+    editor.style.left = (screen.x - edW / 2) + "px";
+    editor.style.top = (screen.y - edH / 2) + "px";
+    editor.style.width = edW + "px";
+    editor.style.height = edH + "px";
+    editor.style.fontSize = 12 * state.zoom + "px";
+    editor.value = arrow.label || "";
+    editor.hidden = false;
+    editor.focus();
+    editor.select();
+
+    const onBlur = () => {
+      arrow.label = editor.value;
+      editor.hidden = true;
+      editor.removeEventListener("blur", onBlur);
+      editor.removeEventListener("keydown", onKey);
+      save();
+      draw();
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") editor.blur();
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); editor.blur(); }
+    };
+    editor.addEventListener("blur", onBlur);
+    editor.addEventListener("keydown", onKey);
   }
 
   function onWheel(e) {
@@ -950,19 +1258,23 @@
       e.preventDefault();
     }
     if (e.key === "v" || e.key === "V") setTool("select");
-    if (e.key === "r" || e.key === "R") setTool("rect");
-    if (e.key === "c" || e.key === "C") setTool("circle");
-    if (e.key === "d" || e.key === "D") setTool("diamond");
+    if (e.key === "s" || e.key === "S") setTool("shape");
     if (e.key === "t" || e.key === "T") setTool("text");
     if (e.key === "a" || e.key === "A") setTool("arrow");
     if (e.key === "h" || e.key === "H") setTool("hand");
   }
 
   function deleteSelected() {
-    if (!state.selected.size) return;
-    state.shapes = state.shapes.filter((s) => !state.selected.has(s.id));
-    state.arrows = state.arrows.filter((a) => !state.selected.has(a.from) && !state.selected.has(a.to));
-    state.selected = new Set();
+    if (!state.selected.size && !state.selectedArrows.size) return;
+    if (state.selected.size) {
+      state.shapes = state.shapes.filter((s) => !state.selected.has(s.id));
+      state.arrows = state.arrows.filter((a) => !state.selected.has(a.from) && !state.selected.has(a.to));
+      state.selected = new Set();
+    }
+    if (state.selectedArrows.size) {
+      state.arrows = state.arrows.filter((a) => !state.selectedArrows.has(a.id));
+      state.selectedArrows = new Set();
+    }
     save();
     draw();
   }
@@ -1040,12 +1352,49 @@
 
     // Toolbar
     document.querySelectorAll(".tool-btn[data-tool]").forEach((btn) => {
-      btn.addEventListener("click", () => setTool(btn.dataset.tool));
+      btn.addEventListener("click", () => {
+        if (btn.dataset.tool === "shape") setTool("shape");
+        else setTool(btn.dataset.tool);
+      });
     });
+
+    // Shape flyout
+    const shapeFlyout = document.getElementById("shapeFlyout");
+    const shapeBtn = document.getElementById("shapeBtn");
+    if (shapeBtn) {
+      shapeBtn.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        shapeFlyout.hidden = !shapeFlyout.hidden;
+      });
+      shapeBtn.addEventListener("click", () => {
+        setTool("shape");
+      });
+    }
+    document.querySelectorAll(".shape-flyout-btn").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        setCurrentShape(btn.dataset.shape);
+      });
+    });
+    document.addEventListener("click", (e) => {
+      if (shapeFlyout && !shapeFlyout.hidden && !shapeFlyout.contains(e.target) && e.target !== shapeBtn) {
+        shapeFlyout.hidden = true;
+      }
+    });
+    const shapeWrap = document.getElementById("shapeToolWrap");
+    if (shapeWrap) {
+      let holdTimer = null;
+      shapeBtn.addEventListener("mousedown", () => {
+        holdTimer = setTimeout(() => { shapeFlyout.hidden = false; holdTimer = null; }, 400);
+      });
+      shapeBtn.addEventListener("mouseup", () => { if (holdTimer) clearTimeout(holdTimer); });
+      shapeBtn.addEventListener("mouseleave", () => { if (holdTimer) clearTimeout(holdTimer); });
+    }
 
     document.getElementById("fillColor").value = state.fillColor;
     document.getElementById("strokeColor").value = state.strokeColor;
     document.getElementById("strokeWidth").value = state.strokeWidth;
+    document.getElementById("textColor").value = state.textColor;
     document.getElementById("fillColor").addEventListener("input", (e) => {
       state.fillColor = e.target.value;
       if (state.selected.size) {
@@ -1065,6 +1414,17 @@
       state.strokeWidth = val;
       if (state.selected.size) {
         state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.strokeWidth = val; });
+        save(); draw();
+      }
+    });
+    document.getElementById("textColor").addEventListener("input", (e) => {
+      state.textColor = e.target.value;
+      if (state.selected.size) {
+        state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.textColor = e.target.value; });
+        save(); draw();
+      }
+      if (state.selectedArrows.size) {
+        state.arrows.forEach((a) => { if (state.selectedArrows.has(a.id)) a.labelColor = e.target.value; });
         save(); draw();
       }
     });
