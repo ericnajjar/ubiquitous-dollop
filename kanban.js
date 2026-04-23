@@ -140,17 +140,19 @@
   let dragFromColId = null;
 
   // ---------- View state ----------
-  let viewMode = "board"; // "board" | "gantt"
+  let viewMode = "board"; // "board" | "list" | "gantt"
 
   function setView(mode) {
     viewMode = mode;
     document.getElementById("board").hidden = mode !== "board";
+    document.getElementById("listView").hidden = mode !== "list";
     document.getElementById("ganttView").hidden = mode !== "gantt";
-    document.getElementById("addColumnBtn").style.display = mode === "gantt" ? "none" : "";
+    document.getElementById("addColumnBtn").style.display = mode === "board" ? "" : "none";
     document.querySelectorAll(".view-toggle-btn").forEach((b) => {
       b.classList.toggle("active", b.dataset.view === mode);
     });
     if (mode === "gantt") renderGantt();
+    if (mode === "list") renderList();
   }
 
   // ---------- Multi-select state ----------
@@ -300,6 +302,7 @@
     renderBoard();
     updateCountdowns();
     if (viewMode === "gantt") renderGantt();
+    if (viewMode === "list") renderList();
     if (selectionMode) updateBulkBar();
   }
 
@@ -685,6 +688,115 @@
     if (danger) btn.classList.add("danger");
     btn.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
     return btn;
+  }
+
+  // ---------- List view ----------
+  function renderList() {
+    const container = document.getElementById("listView");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const wrap = document.createElement("div");
+    wrap.className = "list-view-wrap";
+
+    state.columns.forEach((col) => {
+      const filtered = col.cards.filter(cardMatchesFilter);
+
+      const section = document.createElement("div");
+      section.className = "list-section";
+
+      const header = document.createElement("div");
+      header.className = "list-section-header";
+      const headerTitle = document.createElement("span");
+      headerTitle.className = "list-section-title";
+      headerTitle.textContent = col.title;
+      const headerCount = document.createElement("span");
+      headerCount.className = "list-section-count";
+      headerCount.textContent = filtered.length;
+      header.appendChild(headerTitle);
+      header.appendChild(headerCount);
+      section.appendChild(header);
+
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.className = "list-empty";
+        empty.textContent = "No cards";
+        section.appendChild(empty);
+      }
+
+      const table = document.createElement("div");
+      table.className = "list-table";
+
+      filtered.forEach((card) => {
+        const row = document.createElement("div");
+        row.className = `list-row priority-${card.priority}`;
+        row.addEventListener("click", () => openModal(card, col.id));
+
+        const priCell = document.createElement("span");
+        priCell.className = "list-cell list-cell-pri";
+        const priDot = document.createElement("span");
+        priDot.className = `list-pri-dot priority-${card.priority}`;
+        priCell.appendChild(priDot);
+
+        const typeCell = document.createElement("span");
+        typeCell.className = `list-cell list-cell-type card-type-${card.cardType || 'story'}`;
+        typeCell.textContent = TYPE_CONFIG[card.cardType || 'story'].label;
+
+        const titleCell = document.createElement("span");
+        titleCell.className = "list-cell list-cell-title";
+        if (card.parentId) {
+          const parentEntry = findCardById(card.parentId);
+          if (parentEntry) {
+            const parentTag = document.createElement("span");
+            parentTag.className = "list-parent-tag";
+            parentTag.textContent = parentEntry.card.title;
+            titleCell.appendChild(parentTag);
+          }
+        }
+        const titleText = document.createElement("span");
+        titleText.textContent = card.title;
+        titleCell.appendChild(titleText);
+
+        const tagsCell = document.createElement("span");
+        tagsCell.className = "list-cell list-cell-tags";
+        (card.tags || []).forEach((t) => {
+          const tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = t;
+          tagsCell.appendChild(tag);
+        });
+
+        const dateCell = document.createElement("span");
+        dateCell.className = "list-cell list-cell-date";
+        if (card.dueDate) {
+          const cd = formatCountdown(card.dueDate);
+          if (cd) {
+            const badge = document.createElement("span");
+            badge.className = `countdown ${cd.cls}`;
+            badge.textContent = cd.text;
+            dateCell.appendChild(badge);
+          }
+        }
+
+        const childrenCell = document.createElement("span");
+        childrenCell.className = "list-cell list-cell-children";
+        const childType = TYPE_CONFIG[card.cardType || 'story'].childType;
+        if (childType) {
+          const children = getChildren(card.id);
+          if (children.length) {
+            childrenCell.textContent = children.length + " " + (childType === "epic" ? "epic" : "stor") + (children.length !== 1 ? (childType === "epic" ? "s" : "ies") : (childType === "story" ? "y" : ""));
+          }
+        }
+
+        row.append(priCell, typeCell, titleCell, tagsCell, childrenCell, dateCell);
+        table.appendChild(row);
+      });
+
+      section.appendChild(table);
+      wrap.appendChild(section);
+    });
+
+    container.appendChild(wrap);
   }
 
   // ---------- Gantt ----------
