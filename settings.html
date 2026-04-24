@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Settings</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="cloud-sync.js"></script>
+  <link rel="stylesheet" href="settings.css" />
+  <script src="settings.js" defer></script>
+  <link rel="stylesheet" href="account.css" />
+  <script src="account.js" defer></script>
+  <link rel="stylesheet" href="mascot.css" />
+  <script src="mascot.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope Settings</span>
+      </a>
+      <nav class="site-nav">
+        <a href="charts.html">Charts</a>
+        <a href="slides.html">Slides</a>
+        <a href="kanban.html">Board</a>
+        <a href="notes.html">Notes</a>
+        <a href="canvas.html">Canvas</a>
+        <a href="docs.html">Docs</a>
+        <a href="projects.html">Projects</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="settings-main">
+    <div class="settings-container">
+      <h1 class="settings-heading">Settings</h1>
+
+      <div class="settings-tabs" id="settingsTabs">
+        <button type="button" class="settings-tab active" data-tab="account">Account</button>
+        <button type="button" class="settings-tab" data-tab="teams">Teams</button>
+      </div>
+
+      <!-- ===== ACCOUNT TAB ===== -->
+      <div class="settings-panel" id="accountPanel">
+        <div class="settings-profile-top">
+          <div class="settings-avatar" id="settingsAvatar">?</div>
+          <div class="settings-profile-info">
+            <p class="settings-email" id="settingsEmail"></p>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h2>Profile</h2>
+          <div class="settings-field">
+            <label for="profileName">Display Name</label>
+            <input type="text" id="profileName" placeholder="Your name" autocomplete="name" />
+          </div>
+          <div class="settings-field">
+            <label for="profileTitle">Job Title</label>
+            <input type="text" id="profileTitle" placeholder="e.g. Product Manager" autocomplete="organization-title" />
+          </div>
+          <div class="settings-field-row">
+            <div class="settings-field">
+              <label for="profileCompany">Company</label>
+              <input type="text" id="profileCompany" placeholder="Company name" autocomplete="organization" />
+            </div>
+            <div class="settings-field">
+              <label for="profilePhone">Phone</label>
+              <input type="tel" id="profilePhone" placeholder="+1 (555) 000-0000" autocomplete="tel" />
+            </div>
+          </div>
+          <div class="settings-field">
+            <label for="profileAddress">Address</label>
+            <textarea id="profileAddress" rows="2" placeholder="Street, City, State, ZIP" autocomplete="street-address"></textarea>
+          </div>
+          <div class="settings-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="saveProfileBtn">Save profile</button>
+            <span class="settings-saved-msg" id="profileSavedMsg" hidden>Saved!</span>
+          </div>
+        </div>
+
+        <div class="settings-section settings-session-section">
+          <h2>Session</h2>
+          <p class="settings-hint">Sign out of your DataScope account on this device.</p>
+          <button type="button" class="btn btn-ghost btn-sm danger" id="signOutBtn">Sign out</button>
+        </div>
+      </div>
+
+      <!-- ===== TEAMS TAB ===== -->
+      <div class="settings-panel" id="teamsPanel" hidden>
+        <div class="settings-section-header">
+          <h2>Your Teams</h2>
+          <div class="settings-section-header-actions">
+            <button type="button" class="btn btn-ghost btn-sm" id="joinTeamBtn">Join team</button>
+            <button type="button" class="btn btn-primary btn-sm" id="createTeamBtn">+ Create team</button>
+          </div>
+        </div>
+
+        <div class="settings-inline-form" id="createForm" hidden>
+          <input type="text" id="newTeamName" placeholder="Team name…" autocomplete="off" />
+          <button type="button" class="btn btn-primary btn-sm" id="createConfirm">Create</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="createCancel">Cancel</button>
+          <span class="form-msg" id="createError"></span>
+        </div>
+
+        <div class="settings-inline-form" id="joinForm" hidden>
+          <input type="text" id="joinCode" placeholder="Paste invite code…" autocomplete="off" />
+          <button type="button" class="btn btn-primary btn-sm" id="joinConfirm">Join</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="joinCancel">Cancel</button>
+          <span class="form-msg" id="joinError"></span>
+        </div>
+
+        <div class="teams-grid" id="teamsGrid"></div>
+        <p class="teams-empty" id="teamsEmpty" hidden>No teams yet. Create or join a team to collaborate.</p>
+        <p class="teams-loading" id="teamsLoading">Loading teams…</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Team detail modal -->
+  <div class="modal-overlay" id="teamModalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2 id="modalTeamName"></h2>
+        <button type="button" class="modal-close" id="teamModalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="invite-section">
+          <label>Invite Code</label>
+          <div class="invite-row">
+            <code id="modalInviteCode"></code>
+            <button type="button" class="btn btn-ghost btn-sm" id="copyCodeBtn">Copy</button>
+          </div>
+          <p class="invite-hint">Share this code so others can join your team.</p>
+        </div>
+        <div class="members-section">
+          <h3>Members</h3>
+          <div class="members-list" id="modalMembers"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm danger" id="leaveTeamBtn">Leave team</button>
+        <button type="button" class="btn btn-ghost btn-sm danger" id="deleteTeamBtn" hidden>Delete team</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="teamModalDone">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Saved to your account.</p>
+    </div>
+  </footer>
+</body>
+</html>
