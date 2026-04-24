@@ -118,6 +118,7 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; justify-content: center;
   height: 100%; color: var(--muted); font-size: 15px;
 }
+.detail-placeholder[hidden] { display: none; }
 .detail-placeholder p { margin: 0; }
 .detail-content[hidden] { display: none; }
 
