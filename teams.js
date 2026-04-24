@@ -88,6 +88,7 @@
     const overlay = document.getElementById('modalOverlay');
     document.getElementById('modalTeamName').textContent = team.name;
     document.getElementById('modalInviteCode').textContent = team.invite_code;
+    document.getElementById('deleteTeamBtn').hidden = team.role !== 'owner';
     const list = document.getElementById('modalMembers');
     list.innerHTML = '<p class="members-loading">Loading…</p>';
     overlay.hidden = false;
@@ -188,6 +189,22 @@
     } catch (e) { alert(e.message); }
   }
 
+  async function handleDelete() {
+    if (!currentTeam || currentTeam.role !== 'owner') return;
+    if (!confirm('Permanently delete "' + currentTeam.name + '" and all its data? This cannot be undone.')) return;
+    try {
+      await sb.from('team_data').delete().eq('team_id', currentTeam.id);
+      await sb.from('team_members').delete().eq('team_id', currentTeam.id);
+      await sb.from('teams').delete().eq('id', currentTeam.id);
+      if (ds.activeTeamId === currentTeam.id) {
+        ds.setTeamContext(null, 'Personal');
+      }
+      if (ds.loadUserTeams) await ds.loadUserTeams();
+      closeModal();
+      await renderTeams();
+    } catch (e) { alert('Failed to delete team: ' + e.message); }
+  }
+
   function init() {
     document.getElementById('year').textContent = new Date().getFullYear();
 
@@ -230,6 +247,7 @@
       if (e.target === e.currentTarget) closeModal();
     });
     document.getElementById('leaveTeamBtn').addEventListener('click', handleLeave);
+    document.getElementById('deleteTeamBtn').addEventListener('click', handleDelete);
     document.getElementById('copyCodeBtn').addEventListener('click', () => {
       const code = document.getElementById('modalInviteCode').textContent;
       const btn = document.getElementById('copyCodeBtn');
