@@ -68,97 +68,107 @@
         <h2 id="modalTitle">New card</h2>
         <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
       </div>
-      <div class="modal-body">
-        <div class="field">
-          <label for="cardTitle">Title</label>
-          <input type="text" id="cardTitle" placeholder="Card title" autocomplete="off" />
-        </div>
-        <div class="field">
-          <label>Description</label>
-          <div class="rte-wrap">
-            <div class="rte-toolbar" id="rteToolbar">
-              <button type="button" class="rte-btn" data-cmd="bold" title="Bold"><b>B</b></button>
-              <button type="button" class="rte-btn" data-cmd="italic" title="Italic"><i>I</i></button>
-              <button type="button" class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
-              <span class="rte-divider"></span>
-              <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list">
-                <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect x="1" y="3" width="2" height="2" rx="1"/><rect x="5" y="3" width="10" height="2" rx="1"/><rect x="1" y="7" width="2" height="2" rx="1"/><rect x="5" y="7" width="10" height="2" rx="1"/><rect x="1" y="11" width="2" height="2" rx="1"/><rect x="5" y="11" width="10" height="2" rx="1"/></svg>
-              </button>
-              <button type="button" class="rte-btn" id="rteCheckboxBtn" title="Add checkbox">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect x="1.5" y="2.5" width="6" height="6" rx="1.2"/><polyline points="2.8,5.5 4.2,7 6.5,4"/><line x1="9.5" y1="4" x2="14.5" y2="4"/><line x1="9.5" y1="8" x2="14.5" y2="8"/><line x1="9.5" y1="12" x2="14.5" y2="12"/><rect x="1.5" y="9.5" width="6" height="4" rx="1.2"/></svg>
-              </button>
+      <div class="modal-two-col">
+
+        <!-- LEFT: title, tags/project, description, comments -->
+        <div class="modal-left">
+          <div class="field">
+            <label for="cardTitle">Title</label>
+            <input type="text" id="cardTitle" placeholder="Card title" autocomplete="off" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="cardTags">Tags <span class="field-hint">(comma-separated)</span></label>
+              <input type="text" id="cardTags" placeholder="work, urgent, design" autocomplete="off" />
             </div>
-            <div id="cardDesc" class="rte-editor" contenteditable="true" spellcheck="true" data-placeholder="Add details…"></div>
+            <div class="field">
+              <label for="cardProject">Project</label>
+              <select id="cardProject">
+                <option value="">None</option>
+              </select>
+            </div>
+          </div>
+          <div class="field modal-desc-field">
+            <label>Description</label>
+            <div class="rte-wrap">
+              <div class="rte-toolbar" id="rteToolbar">
+                <button type="button" class="rte-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+                <button type="button" class="rte-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+                <button type="button" class="rte-btn" data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+                <span class="rte-divider"></span>
+                <button type="button" class="rte-btn" data-cmd="insertUnorderedList" title="Bullet list">
+                  <svg viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect x="1" y="3" width="2" height="2" rx="1"/><rect x="5" y="3" width="10" height="2" rx="1"/><rect x="1" y="7" width="2" height="2" rx="1"/><rect x="5" y="7" width="10" height="2" rx="1"/><rect x="1" y="11" width="2" height="2" rx="1"/><rect x="5" y="11" width="10" height="2" rx="1"/></svg>
+                </button>
+                <button type="button" class="rte-btn" id="rteCheckboxBtn" title="Add checkbox">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg" width="14" height="14"><rect x="1.5" y="2.5" width="6" height="6" rx="1.2"/><polyline points="2.8,5.5 4.2,7 6.5,4"/><line x1="9.5" y1="4" x2="14.5" y2="4"/><line x1="9.5" y1="8" x2="14.5" y2="8"/><line x1="9.5" y1="12" x2="14.5" y2="12"/><rect x="1.5" y="9.5" width="6" height="4" rx="1.2"/></svg>
+                </button>
+              </div>
+              <div id="cardDesc" class="rte-editor" contenteditable="true" spellcheck="true" data-placeholder="Add details…"></div>
+            </div>
+          </div>
+          <div class="field" id="commentsField">
+            <label>Comments</label>
+            <div class="comments-list" id="commentsList"></div>
+            <div class="comment-input-row">
+              <textarea id="commentInput" rows="2" placeholder="Add a comment…"></textarea>
+              <button type="button" class="btn btn-ghost btn-sm" id="addCommentBtn">Post</button>
+            </div>
           </div>
         </div>
-        <div class="field-row">
-          <div class="field">
-            <label for="cardPriority">Priority</label>
-            <select id="cardPriority">
-              <option value="low">🟢 Low</option>
-              <option value="medium" selected>🟡 Medium</option>
-              <option value="high">🔴 High</option>
-            </select>
+
+        <!-- RIGHT: sidebar panels -->
+        <div class="modal-right">
+          <div class="modal-sidebar-group" id="cardMoveWrap"></div>
+          <div class="modal-sidebar-group">
+            <div class="field">
+              <label for="cardPriority">Priority</label>
+              <select id="cardPriority">
+                <option value="low">🟢 Low</option>
+                <option value="medium" selected>🟡 Medium</option>
+                <option value="high">🔴 High</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="cardColumn">Column</label>
+              <select id="cardColumn"></select>
+            </div>
           </div>
-          <div class="field">
-            <label for="cardColumn">Column</label>
-            <select id="cardColumn"></select>
+          <div class="modal-sidebar-group">
+            <div class="field">
+              <label for="cardType">Type</label>
+              <select id="cardType">
+                <option value="story">📋 Story</option>
+                <option value="epic">🔷 Epic</option>
+                <option value="project">🏗 Project</option>
+              </select>
+            </div>
+            <div class="field" id="cardParentField">
+              <label for="cardParent">Parent</label>
+              <select id="cardParent">
+                <option value="">— None —</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label for="cardType">Type</label>
-            <select id="cardType">
-              <option value="story">📋 Story</option>
-              <option value="epic">🔷 Epic</option>
-              <option value="project">🏗 Project</option>
-            </select>
+          <div class="modal-sidebar-group">
+            <div class="field">
+              <label for="cardStart">Start date</label>
+              <input type="date" id="cardStart" />
+            </div>
+            <div class="field">
+              <label for="cardDue">Due date</label>
+              <input type="date" id="cardDue" />
+            </div>
+            <div class="field">
+              <label for="cardReminder">Reminder</label>
+              <input type="date" id="cardReminder" />
+            </div>
           </div>
-          <div class="field" id="cardParentField">
-            <label for="cardParent">Parent</label>
-            <select id="cardParent">
-              <option value="">— None —</option>
-            </select>
-          </div>
-        </div>
-        <div class="field-row field-row-3">
-          <div class="field">
-            <label for="cardStart">Start date</label>
-            <input type="date" id="cardStart" />
-          </div>
-          <div class="field">
-            <label for="cardDue">Due date</label>
-            <input type="date" id="cardDue" />
-          </div>
-          <div class="field">
-            <label for="cardReminder">Reminder</label>
-            <input type="date" id="cardReminder" />
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label for="cardTags">Tags <span class="field-hint">(comma-separated)</span></label>
-            <input type="text" id="cardTags" placeholder="work, urgent, design" autocomplete="off" />
-          </div>
-          <div class="field">
-            <label for="cardProject">Project</label>
-            <select id="cardProject">
-              <option value="">None</option>
-            </select>
+          <div class="modal-sidebar-group modal-linked-content">
+            <span class="modal-sidebar-label">Linked content</span>
+            <div class="attach-sections" id="attachSections"></div>
           </div>
         </div>
-        <div class="field-row">
-          <div class="field team-move-wrap" id="cardMoveWrap"></div>
-        </div>
-        <div class="field" id="commentsField">
-          <label>Comments</label>
-          <div class="comments-list" id="commentsList"></div>
-          <div class="comment-input-row">
-            <textarea id="commentInput" rows="2" placeholder="Add a comment…"></textarea>
-            <button type="button" class="btn btn-ghost btn-sm" id="addCommentBtn">Post</button>
-          </div>
-        </div>
-        <div class="attach-sections" id="attachSections"></div>
+
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost btn-sm danger" id="deleteCardBtn" hidden>Delete card</button>
