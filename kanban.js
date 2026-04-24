@@ -1086,32 +1086,72 @@
       });
     });
 
-    document.getElementById("rteCheckboxBtn").addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      editor.focus();
-      const check = document.createElement("div");
-      check.className = "rte-check";
+    function makeCheckItem(labelText) {
+      const d = document.createElement("div");
+      d.className = "rte-check";
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.setAttribute("contenteditable", "false");
-      const span = document.createElement("span");
-      span.className = "rte-check-label";
-      span.textContent = " ";
-      check.appendChild(cb);
-      check.appendChild(span);
+      const sp = document.createElement("span");
+      sp.className = "rte-check-label";
+      sp.textContent = labelText || " ";
+      d.appendChild(cb);
+      d.appendChild(sp);
+      return d;
+    }
+
+    document.getElementById("rteCheckboxBtn").addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      editor.focus();
       const sel = window.getSelection();
+      const selectedText = sel && sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0).toString() : '';
+      const check = makeCheckItem(selectedText);
+      const span = check.querySelector(".rte-check-label");
       if (sel && sel.rangeCount) {
         const range = sel.getRangeAt(0);
         range.deleteContents();
         range.insertNode(check);
-        const newRange = document.createRange();
-        newRange.setStart(span, 0);
-        newRange.collapse(true);
+        const nr = document.createRange();
+        nr.selectNodeContents(span);
+        nr.collapse(false);
         sel.removeAllRanges();
-        sel.addRange(newRange);
+        sel.addRange(nr);
       } else {
         editor.appendChild(check);
       }
+    });
+
+    editor.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" || e.shiftKey) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      const anchor = sel.anchorNode;
+      const el = anchor && (anchor.nodeType === 3 ? anchor.parentElement : anchor);
+      if (!el) return;
+      const checkItem = el.closest(".rte-check");
+      if (!checkItem || !editor.contains(checkItem)) return;
+      e.preventDefault();
+      const label = checkItem.querySelector(".rte-check-label");
+      if (label && label.textContent.trim() === "") {
+        const p = document.createElement("div");
+        p.innerHTML = "<br>";
+        checkItem.after(p);
+        checkItem.remove();
+        const r = document.createRange();
+        r.setStart(p, 0);
+        r.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return;
+      }
+      const nc = makeCheckItem("");
+      const ns = nc.querySelector(".rte-check-label");
+      checkItem.after(nc);
+      const r = document.createRange();
+      r.setStart(ns, 0);
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
     });
 
     editor.addEventListener("keyup", updateRteToolbarState);
