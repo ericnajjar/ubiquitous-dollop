@@ -39,7 +39,7 @@
       icon: '<svg viewBox="0 0 32 32" fill="none"><path d="M8 3h11l7 7v19a2 2 0 01-2 2H8a2 2 0 01-2-2V5a2 2 0 012-2z" stroke="currentColor" stroke-width="2"/><path d="M18 3v8h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 17h12M10 22h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>'
     },
     {
-      name: 'Projects', desc: 'Group charts, docs, notes, and more together.', href: 'projects.html',
+      name: 'Collections', desc: 'Group charts, docs, notes, and more together.', href: 'projects.html',
       icon: '<svg viewBox="0 0 32 32" fill="none"><path d="M4 10a3 3 0 013-3h5l3 3h10a3 3 0 013 3v12a3 3 0 01-3 3H7a3 3 0 01-3-3V10z" stroke="currentColor" stroke-width="2"/></svg>'
     }
   ];

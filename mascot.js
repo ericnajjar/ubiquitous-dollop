@@ -149,9 +149,9 @@
       description: "Write user stories and acceptance criteria for your projects and board cards.", emoji: "📄",
     },
     projects: {
-      name: "Projects", url: "projects.html",
-      keywords: ["project", "organiz", "manage", "hub", "link", "group", "team", "plan", "overview"],
-      description: "Create projects to link charts, decks, board cards, and notes together.", emoji: "📁",
+      name: "Collections", url: "projects.html",
+      keywords: ["project", "collection", "organiz", "manage", "hub", "link", "group", "team", "plan", "overview"],
+      description: "Create collections to link charts, decks, board cards, and notes together.", emoji: "📁",
     },
   };
 
@@ -390,7 +390,7 @@ DataScope tools:
 - Board (kanban.html): Kanban + Gantt with AI card generation from documents
 - Notes (notes.html): sticky notes with tags
 - Canvas (canvas.html): shapes, arrows, diagrams
-- Projects (projects.html): link everything together
+- Collections (projects.html): link everything together
 
 ${pageCtx}
 
@@ -513,7 +513,7 @@ Be concise and direct — 1–3 sentences unless detail is needed. Use **bold** 
       const name = extractProjectName(input);
       if (name) {
         const project = createProject(name);
-        return { text: `Done! I created a project called "${project.name}." You can now link charts, slides, board cards, and notes to it from each tool. Want me to suggest which tools you'll need?`, actions: [{ label: "Open Projects", action: () => window.location.href = "projects.html" }, { label: "What tools should I use?", action: "suggest_tools" }] };
+        return { text: `Done! I created a collection called "${project.name}." You can now link charts, slides, board cards, and notes to it from each tool. Want me to suggest which tools you'll need?`, actions: [{ label: "Open Collections", action: () => window.location.href = "projects.html" }, { label: "What tools should I use?", action: "suggest_tools" }] };
       }
       return { text: "I'd love to set up a project for you! What should we call it?", actions: [], expectProjectName: true };
     }
@@ -738,7 +738,7 @@ Be concise and direct — 1–3 sentences unless detail is needed. Use **bold** 
       conversationState = "normal";
       const project = createProject(text);
       setTimeout(() => {
-        addBotMessage(`Created! Your project "${project.name}" is ready. You can start linking items to it from any tool.`, [{ label: "Open Projects", action: () => window.location.href = "projects.html" }, { label: "What else can I do?", action: "help" }]);
+        addBotMessage(`Created! Your collection "${project.name}" is ready. You can start linking items to it from any tool.`, [{ label: "Open Collections", action: () => window.location.href = "projects.html" }, { label: "What else can I do?", action: "help" }]);
       }, 500);
       return;
     }

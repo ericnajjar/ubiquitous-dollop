@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DataScope — Projects</title>
+  <title>DataScope — Collections</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
@@ -20,7 +20,7 @@
     <div class="header-inner">
       <a class="brand" href="index.html">
         <span class="brand-mark" aria-hidden="true"></span>
-        <span class="brand-text">DataScope Projects</span>
+        <span class="brand-text">DataScope Collections</span>
       </a>
       <nav class="site-nav">
         <a href="charts.html">Charts</a>
@@ -29,73 +29,46 @@
         <a href="notes.html">Notes</a>
         <a href="canvas.html">Canvas</a>
         <a href="docs.html">Docs</a>
-        <a href="projects.html" class="active">Projects</a>
+        <a href="projects.html" class="active">Collections</a>
       </nav>
     </div>
   </header>
 
-  <main class="projects-main">
-    <div class="projects-toolbar">
-      <h1>Projects</h1>
-      <button type="button" class="btn btn-primary btn-sm" id="newProjectBtn">+ New project</button>
-    </div>
+  <main class="collections-layout">
+    <!-- Left sidebar -->
+    <aside class="collections-sidebar" id="collectionsSidebar">
+      <div class="sidebar-header">
+        <h2>Collections</h2>
+        <button type="button" class="btn btn-primary btn-sm" id="newCollectionBtn">+ New</button>
+      </div>
+      <div class="sidebar-list" id="sidebarList"></div>
+      <p class="sidebar-empty" id="sidebarEmpty" hidden>No collections yet.</p>
+    </aside>
 
-    <div class="projects-grid" id="projectsGrid"></div>
-    <p class="empty-state" id="emptyState" hidden>No projects yet. Click "+ New project" to get started.</p>
+    <!-- Right detail -->
+    <section class="collection-detail" id="collectionDetail">
+      <div class="detail-placeholder" id="detailPlaceholder">
+        <p>Select a collection or create a new one.</p>
+      </div>
+
+      <div class="detail-content" id="detailContent" hidden>
+        <div class="detail-header">
+          <h1 id="detailName" contenteditable="true" spellcheck="false" data-placeholder="Collection name"></h1>
+          <div class="detail-actions">
+            <button type="button" class="btn btn-ghost btn-sm danger" id="deleteCollectionBtn">Delete</button>
+          </div>
+        </div>
+
+        <div class="detail-desc-wrap">
+          <textarea id="detailDesc" rows="3" placeholder="Add a description…"></textarea>
+        </div>
+
+        <div class="detail-sections" id="detailSections"></div>
+
+        <div class="detail-add-bar" id="detailAddBar"></div>
+      </div>
+    </section>
   </main>
-
-  <!-- Project detail modal -->
-  <div class="modal-overlay" id="modalOverlay" hidden>
-    <div class="modal" id="projectModal" role="dialog" aria-modal="true">
-      <div class="modal-header">
-        <input type="text" id="projectNameInput" class="title-input" placeholder="Project name" />
-        <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="field">
-          <label for="projectDescInput">Description</label>
-          <textarea id="projectDescInput" rows="2" placeholder="What is this project about?"></textarea>
-        </div>
-
-        <div class="linked-section">
-          <h3>Charts</h3>
-          <div class="linked-items" id="linkedCharts"></div>
-          <p class="linked-hint">Assign charts from the <a href="charts.html">Charts</a> page.</p>
-        </div>
-
-        <div class="linked-section">
-          <h3>Slide Decks</h3>
-          <div class="linked-items" id="linkedDecks"></div>
-          <p class="linked-hint">Assign decks from the <a href="slides.html">Slides</a> page.</p>
-        </div>
-
-        <div class="linked-section">
-          <h3>Board Cards</h3>
-          <div class="linked-items" id="linkedCards"></div>
-          <p class="linked-hint">Assign cards from the <a href="kanban.html">Board</a> page.</p>
-        </div>
-
-        <div class="linked-section">
-          <h3>Notes</h3>
-          <div class="linked-items" id="linkedNotes"></div>
-          <p class="linked-hint">Assign notes from the <a href="notes.html">Notes</a> page.</p>
-        </div>
-
-        <div class="linked-section">
-          <h3>Docs</h3>
-          <div class="linked-items" id="linkedDocs"></div>
-          <p class="linked-hint">Assign docs from the <a href="docs.html">Docs</a> page.</p>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-ghost btn-sm danger" id="deleteProjectBtn">Delete project</button>
-        <div class="team-move-wrap" id="projectMoveWrap"></div>
-        <span class="spacer"></span>
-        <button type="button" class="btn btn-ghost btn-sm" id="modalCancel">Cancel</button>
-        <button type="button" class="btn btn-primary btn-sm" id="modalSave">Save</button>
-      </div>
-    </div>
-  </div>
 
   <footer class="site-footer">
     <div class="footer-inner">
