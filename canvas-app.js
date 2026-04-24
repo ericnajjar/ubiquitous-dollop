@@ -19,6 +19,7 @@
     strokeColor: "#6ea8ff",
     textColor: "#e7ecff",
     strokeWidth: 1.5,
+    textAlign: "center",
     selected: new Set(),
     selectedArrows: new Set(),
     pan: { x: 0, y: 0 },
@@ -41,6 +42,7 @@
   let resizing = null;
   let arrowEndpointDrag = null; // { arrowId, endpoint: "from"|"to", x, y }
   let arrowBodyDrag = null; // { arrowId, startX, startY, origX1, origY1, origX2, origY2 }
+  let clipboard = null; // { shapes: [], arrows: [] }
   const SNAP_THRESHOLD = 8;
   const HANDLE_SIZE = 8;
   const ARROW_HIT_DIST = 8;
@@ -443,8 +445,8 @@
       drawArrowFull(a, selected);
     });
 
-    // Arrow preview while creating
-    if (state.tool === "arrow" && creating) {
+    // Arrow/line preview while creating
+    if ((state.tool === "arrow" || state.tool === "line") && creating) {
       let sx, sy;
       if (arrowStart) {
         const from = state.shapes.find((s) => s.id === arrowStart);
@@ -557,11 +559,13 @@
 
     // Draw text
     if (s.label) {
+      const align = s.textAlign || "center";
       ctx.fillStyle = s.textColor || "#e7ecff";
       ctx.font = `${s.fontSize || 14}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = "center";
+      ctx.textAlign = align;
       ctx.textBaseline = "middle";
-      wrapText(s.label, s.x + s.w / 2, s.y + s.h / 2, s.w - 16, s.fontSize || 14);
+      const tx = align === "left" ? s.x + 8 : align === "right" ? s.x + s.w - 8 : s.x + s.w / 2;
+      wrapText(s.label, tx, s.y + s.h / 2, s.w - 16, s.fontSize || 14);
     }
   }
 
@@ -604,14 +608,16 @@
     ctx.lineWidth = selected ? 3 : 2;
     ctx.stroke();
 
-    const headLen = 10;
-    const a1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-    ctx.beginPath();
-    ctx.moveTo(p2.x, p2.y);
-    ctx.lineTo(p2.x - headLen * Math.cos(a1 - 0.4), p2.y - headLen * Math.sin(a1 - 0.4));
-    ctx.moveTo(p2.x, p2.y);
-    ctx.lineTo(p2.x - headLen * Math.cos(a1 + 0.4), p2.y - headLen * Math.sin(a1 + 0.4));
-    ctx.stroke();
+    if (!a.lineOnly) {
+      const headLen = 10;
+      const a1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      ctx.beginPath();
+      ctx.moveTo(p2.x, p2.y);
+      ctx.lineTo(p2.x - headLen * Math.cos(a1 - 0.4), p2.y - headLen * Math.sin(a1 - 0.4));
+      ctx.moveTo(p2.x, p2.y);
+      ctx.lineTo(p2.x - headLen * Math.cos(a1 + 0.4), p2.y - headLen * Math.sin(a1 + 0.4));
+      ctx.stroke();
+    }
 
     if (a.label) {
       const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
@@ -741,6 +747,17 @@
     else viewport.style.cursor = "crosshair";
   }
 
+  function setTextAlign(align) {
+    state.textAlign = align;
+    document.querySelectorAll(".tool-align-btn").forEach(b => {
+      b.classList.toggle("active", b.dataset.align === align);
+    });
+    if (state.selected.size) {
+      state.shapes.forEach(s => { if (state.selected.has(s.id)) s.textAlign = align; });
+      save(); draw();
+    }
+  }
+
   function setCurrentShape(shape) {
     state.currentShape = shape;
     const icon = document.getElementById("shapeBtnIcon");
@@ -858,15 +875,15 @@
         marquee = { startX: world.x, startY: world.y, w: 0, h: 0 };
       }
       draw();
-    } else if (state.tool === "arrow") {
+    } else if (state.tool === "arrow" || state.tool === "line") {
       const hit = hitTest(world.x, world.y);
       if (hit) {
         arrowStart = hit.id;
-        creating = { type: "arrow", currentX: world.x, currentY: world.y, startX: world.x, startY: world.y };
+        creating = { type: state.tool, currentX: world.x, currentY: world.y, startX: world.x, startY: world.y };
         state.selected = new Set([hit.id]);
       } else {
         arrowStart = null;
-        creating = { type: "arrow", currentX: world.x, currentY: world.y, startX: world.x, startY: world.y };
+        creating = { type: state.tool, currentX: world.x, currentY: world.y, startX: world.x, startY: world.y };
       }
       draw();
     } else {
@@ -988,7 +1005,7 @@
       marquee.h = world.y - marquee.startY;
       draw();
     } else if (creating) {
-      if (creating.type === "arrow") {
+      if (creating.type === "arrow" || creating.type === "line") {
         creating.currentX = world.x;
         creating.currentY = world.y;
       } else {
@@ -1080,6 +1097,15 @@
           if (s.x + s.w > mx && s.x < mx + mw && s.y + s.h > my && s.y < my + mh) sel.add(s.id);
         }
         state.selected = sel;
+        const selArrows = new Set();
+        for (const a of state.arrows) {
+          const { p1, p2 } = getArrowPoints(a);
+          if (p1.x >= mx && p1.x <= mx + mw && p1.y >= my && p1.y <= my + mh &&
+              p2.x >= mx && p2.x <= mx + mw && p2.y >= my && p2.y <= my + mh) {
+            selArrows.add(a.id);
+          }
+        }
+        state.selectedArrows = selArrows;
       }
       marquee = null;
       draw();
@@ -1087,13 +1113,14 @@
     }
 
     if (creating) {
-      if (creating.type === "arrow") {
+      if (creating.type === "arrow" || creating.type === "line") {
         const pos = getCanvasPos(e);
         const world = screenToWorld(pos.x, pos.y);
         const hit = hitTest(world.x, world.y);
         const dist = Math.hypot(world.x - creating.startX, world.y - creating.startY);
         if (dist > 5) {
           const arrow = { id: uid(), color: state.strokeColor };
+          if (creating.type === "line") arrow.lineOnly = true;
           if (arrowStart) {
             arrow.from = arrowStart;
           } else {
@@ -1109,10 +1136,15 @@
             arrow.y2 = world.y;
           }
           const duplicate = arrowStart && hit && state.arrows.some((a) => a.from === arrowStart && a.to === hit.id);
-          if (!duplicate) state.arrows.push(arrow);
+          if (!duplicate) {
+            state.arrows.push(arrow);
+            state.selectedArrows = new Set([arrow.id]);
+            state.selected = new Set();
+          }
         }
         arrowStart = null;
         creating = null;
+        setTool("select");
         save();
         draw();
         return;
@@ -1124,7 +1156,6 @@
       const h = Math.abs(creating.h);
 
       if (w < MIN_SHAPE_SIZE && h < MIN_SHAPE_SIZE) {
-        // Click without drag — create with default size
         const defaultW = creating.type === "text" ? 160 : 140;
         const defaultH = creating.type === "text" ? 40 : 80;
         const shape = {
@@ -1139,11 +1170,13 @@
           strokeWidth: state.strokeWidth,
           label: "",
           textColor: state.textColor,
+          textAlign: state.textAlign || "center",
           fontSize: 14,
         };
         state.shapes.push(shape);
         state.selected = new Set([shape.id]);
         creating = null;
+        setTool("select");
         save();
         draw();
         openTextEditor(shape);
@@ -1159,11 +1192,13 @@
         strokeWidth: state.strokeWidth,
         label: "",
         textColor: state.textColor,
+        textAlign: state.textAlign || "center",
         fontSize: 14,
       };
       state.shapes.push(shape);
       state.selected = new Set([shape.id]);
       creating = null;
+      setTool("select");
       save();
       draw();
       openTextEditor(shape);
@@ -1246,6 +1281,7 @@
     editor.style.width = (shape.w * state.zoom) + "px";
     editor.style.height = (shape.h * state.zoom) + "px";
     editor.style.fontSize = (shape.fontSize || 14) * state.zoom + "px";
+    editor.style.textAlign = shape.textAlign || "center";
     editor.value = shape.label || "";
     editor.hidden = false;
     editor.focus();
@@ -1274,20 +1310,125 @@
     if (!document.getElementById("textEditor").hidden) return;
     if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
 
+    const mod = e.metaKey || e.ctrlKey;
+
     if (e.key === "Delete" || e.key === "Backspace") {
       deleteSelected();
       e.preventDefault();
     }
-    if (e.key === "v" || e.key === "V") setTool("select");
-    if (e.key === "s" || e.key === "S") setTool("shape");
-    if (e.key === "r" || e.key === "R") setCurrentShape("rect");
-    if (e.key === "c" || e.key === "C") setCurrentShape("circle");
-    if (e.key === "d" || e.key === "D") setCurrentShape("diamond");
-    if (e.key === "t" || e.key === "T") setTool("text");
-    if (e.key === "a" || e.key === "A") setTool("arrow");
-    if (e.key === "h" || e.key === "H") setTool("hand");
-    if (e.key === "]") { bringForward(); e.preventDefault(); }
-    if (e.key === "[") { sendBackward(); e.preventDefault(); }
+
+    // Copy
+    if (mod && e.key === "c") {
+      copySelected();
+      e.preventDefault();
+      return;
+    }
+    // Paste
+    if (mod && e.key === "v") {
+      pasteClipboard();
+      e.preventDefault();
+      return;
+    }
+    // Select all
+    if (mod && e.key === "a") {
+      state.selected = new Set(state.shapes.map(s => s.id));
+      state.selectedArrows = new Set(state.arrows.map(a => a.id));
+      draw();
+      e.preventDefault();
+      return;
+    }
+
+    // Arrow key movement
+    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      if (state.selected.size || state.selectedArrows.size) {
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
+        moveSelected(dx, dy);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (!mod) {
+      if (e.key === "v" || e.key === "V") setTool("select");
+      if (e.key === "s" || e.key === "S") setTool("shape");
+      if (e.key === "r" || e.key === "R") setCurrentShape("rect");
+      if (e.key === "c" || e.key === "C") setCurrentShape("circle");
+      if (e.key === "d" || e.key === "D") setCurrentShape("diamond");
+      if (e.key === "t" || e.key === "T") setTool("text");
+      if (e.key === "a" || e.key === "A") setTool("arrow");
+      if (e.key === "l" || e.key === "L") setTool("line");
+      if (e.key === "h" || e.key === "H") setTool("hand");
+      if (e.key === "]") { bringForward(); e.preventDefault(); }
+      if (e.key === "[") { sendBackward(); e.preventDefault(); }
+    }
+  }
+
+  function moveSelected(dx, dy) {
+    for (const id of state.selected) {
+      const s = state.shapes.find(sh => sh.id === id);
+      if (s) { s.x += dx; s.y += dy; }
+    }
+    for (const id of state.selectedArrows) {
+      const a = state.arrows.find(ar => ar.id === id);
+      if (a) {
+        const { p1, p2 } = getArrowPoints(a);
+        if (a.from && !state.selected.has(a.from)) {
+          a.from = null; a.x1 = p1.x + dx; a.y1 = p1.y + dy;
+        } else if (!a.from && a.x1 !== undefined) { a.x1 += dx; a.y1 += dy; }
+        if (a.to && !state.selected.has(a.to)) {
+          a.to = null; a.x2 = p2.x + dx; a.y2 = p2.y + dy;
+        } else if (!a.to && a.x2 !== undefined) { a.x2 += dx; a.y2 += dy; }
+      }
+    }
+    save();
+    draw();
+  }
+
+  function copySelected() {
+    const shapes = state.shapes.filter(s => state.selected.has(s.id));
+    const shapeIds = new Set(shapes.map(s => s.id));
+    const arrows = state.arrows.filter(a => state.selectedArrows.has(a.id) || (shapeIds.has(a.from) && shapeIds.has(a.to)));
+    if (!shapes.length && !arrows.length) return;
+    clipboard = {
+      shapes: JSON.parse(JSON.stringify(shapes)),
+      arrows: JSON.parse(JSON.stringify(arrows)),
+    };
+  }
+
+  function pasteClipboard() {
+    if (!clipboard || (!clipboard.shapes.length && !clipboard.arrows.length)) return;
+    const idMap = {};
+    const offset = 20;
+    const newShapes = clipboard.shapes.map(s => {
+      const newId = uid();
+      idMap[s.id] = newId;
+      return { ...s, id: newId, x: s.x + offset, y: s.y + offset };
+    });
+    const newArrows = clipboard.arrows.map(a => {
+      const newId = uid();
+      const na = { ...a, id: newId };
+      if (a.from && idMap[a.from]) na.from = idMap[a.from];
+      else if (a.from) { na.from = null; na.x1 = (a.x1 || 0) + offset; na.y1 = (a.y1 || 0) + offset; }
+      if (a.x1 !== undefined && !a.from) { na.x1 = a.x1 + offset; na.y1 = a.y1 + offset; }
+      if (a.to && idMap[a.to]) na.to = idMap[a.to];
+      else if (a.to) { na.to = null; na.x2 = (a.x2 || 0) + offset; na.y2 = (a.y2 || 0) + offset; }
+      if (a.x2 !== undefined && !a.to) { na.x2 = a.x2 + offset; na.y2 = a.y2 + offset; }
+      return na;
+    });
+    state.shapes.push(...newShapes);
+    state.arrows.push(...newArrows);
+    state.selected = new Set(newShapes.map(s => s.id));
+    state.selectedArrows = new Set(newArrows.map(a => a.id));
+    // Shift clipboard for consecutive pastes
+    clipboard.shapes.forEach(s => { s.x += offset; s.y += offset; });
+    clipboard.arrows.forEach(a => {
+      if (a.x1 !== undefined) { a.x1 += offset; a.y1 += offset; }
+      if (a.x2 !== undefined) { a.x2 += offset; a.y2 += offset; }
+    });
+    save();
+    draw();
   }
 
   function deleteSelected() {
@@ -1349,11 +1490,7 @@
     oc.translate(pad - minX, pad - minY);
     const origCtx = ctx;
     ctx = oc;
-    arrows.forEach((a) => {
-      const from = shapes.find((s) => s.id === a.from);
-      const to = shapes.find((s) => s.id === a.to);
-      if (from && to) drawArrow(from, to, a.color || "#6ea8ff");
-    });
+    arrows.forEach((a) => drawArrowFull(a, false));
     shapes.forEach((s) => drawShape(s, false));
     ctx = origCtx;
     return off;
@@ -1496,6 +1633,11 @@
         state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.stroke = state.strokeColor; });
         save(); draw();
       }
+    });
+
+    // Text alignment buttons
+    document.querySelectorAll(".tool-align-btn").forEach(btn => {
+      btn.addEventListener("click", () => setTextAlign(btn.dataset.align));
     });
 
     document.getElementById("bringFwdBtn").addEventListener("click", bringForward);
