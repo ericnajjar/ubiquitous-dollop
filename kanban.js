@@ -513,36 +513,38 @@
       const desc = document.createElement("div");
       desc.className = "card-desc";
       desc.innerHTML = descToHtml(card.description);
-      const allCbs = desc.querySelectorAll('.rte-check input[type="checkbox"]');
-      let doneChecks = 0;
-      allCbs.forEach((cb, idx) => {
-        if (cb.hasAttribute('checked')) { cb.checked = true; doneChecks++; }
-        cb.addEventListener('click', (e) => {
+      const allChecks = desc.querySelectorAll(".rte-check");
+      const doneChecks = [...allChecks].filter(c => c.getAttribute("data-checked") === "true").length;
+      allChecks.forEach((check, idx) => {
+        check.addEventListener("mousedown", (e) => {
+          const rect = check.getBoundingClientRect();
+          if (e.clientX - rect.left > 22) return;
           e.stopPropagation();
-          const tmp = document.createElement('div');
+          e.preventDefault();
+          const tmp = document.createElement("div");
           tmp.innerHTML = descToHtml(card.description);
-          const storeCbs = tmp.querySelectorAll('.rte-check input[type="checkbox"]');
-          if (storeCbs[idx]) {
-            if (cb.checked) storeCbs[idx].setAttribute('checked', '');
-            else storeCbs[idx].removeAttribute('checked');
+          const store = tmp.querySelectorAll(".rte-check");
+          if (store[idx]) {
+            const was = store[idx].getAttribute("data-checked") === "true";
+            store[idx].setAttribute("data-checked", was ? "false" : "true");
           }
           card.description = tmp.innerHTML;
           save();
           renderAll();
         });
       });
-      if (allCbs.length > 0) {
-        const prog = document.createElement('div');
-        prog.className = 'card-desc-progress';
-        const barOuter = document.createElement('div');
-        barOuter.className = 'card-desc-progress-bar';
-        const barFill = document.createElement('div');
-        barFill.className = 'card-desc-progress-fill';
-        barFill.style.width = Math.round((doneChecks / allCbs.length) * 100) + '%';
+      if (allChecks.length > 0) {
+        const prog = document.createElement("div");
+        prog.className = "card-desc-progress";
+        const barOuter = document.createElement("div");
+        barOuter.className = "card-desc-progress-bar";
+        const barFill = document.createElement("div");
+        barFill.className = "card-desc-progress-fill";
+        barFill.style.width = Math.round((doneChecks / allChecks.length) * 100) + "%";
         barOuter.appendChild(barFill);
         prog.appendChild(barOuter);
-        const lbl = document.createElement('span');
-        lbl.textContent = doneChecks + '/' + allCbs.length;
+        const lbl = document.createElement("span");
+        lbl.textContent = doneChecks + "/" + allChecks.length;
         prog.appendChild(lbl);
         desc.appendChild(prog);
       }
@@ -1056,10 +1058,6 @@
   function syncAndGetRteHtml() {
     const editor = document.getElementById("cardDesc");
     if (!editor) return '';
-    editor.querySelectorAll('.rte-check input[type="checkbox"]').forEach(cb => {
-      if (cb.checked) cb.setAttribute('checked', '');
-      else cb.removeAttribute('checked');
-    });
     const html = editor.innerHTML;
     return (html === '<br>' || html === '') ? '' : html;
   }
@@ -1086,17 +1084,11 @@
       });
     });
 
-    function makeCheckItem(labelText) {
+    function makeCheckDiv(labelText) {
       const d = document.createElement("div");
       d.className = "rte-check";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.setAttribute("contenteditable", "false");
-      const sp = document.createElement("span");
-      sp.className = "rte-check-label";
-      sp.textContent = labelText || " ";
-      d.appendChild(cb);
-      d.appendChild(sp);
+      d.setAttribute("data-checked", "false");
+      d.textContent = labelText || "";
       return d;
     }
 
@@ -1104,20 +1096,31 @@
       e.preventDefault();
       editor.focus();
       const sel = window.getSelection();
-      const selectedText = sel && sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0).toString() : '';
-      const check = makeCheckItem(selectedText);
-      const span = check.querySelector(".rte-check-label");
+      const selectedText = sel && sel.rangeCount && !sel.isCollapsed ? sel.getRangeAt(0).toString() : "";
+      const check = makeCheckDiv(selectedText);
       if (sel && sel.rangeCount) {
         const range = sel.getRangeAt(0);
         range.deleteContents();
         range.insertNode(check);
         const nr = document.createRange();
-        nr.selectNodeContents(span);
+        nr.selectNodeContents(check);
         nr.collapse(false);
         sel.removeAllRanges();
         sel.addRange(nr);
       } else {
         editor.appendChild(check);
+      }
+    });
+
+    // Toggle checkbox state by clicking in the left 24px (the pseudo-element area)
+    editor.addEventListener("mousedown", (e) => {
+      const check = e.target.closest(".rte-check");
+      if (!check || !editor.contains(check)) return;
+      const rect = check.getBoundingClientRect();
+      if (e.clientX - rect.left <= 22) {
+        e.preventDefault();
+        const checked = check.getAttribute("data-checked") === "true";
+        check.setAttribute("data-checked", checked ? "false" : "true");
       }
     });
 
@@ -1131,8 +1134,7 @@
       const checkItem = el.closest(".rte-check");
       if (!checkItem || !editor.contains(checkItem)) return;
       e.preventDefault();
-      const label = checkItem.querySelector(".rte-check-label");
-      if (label && label.textContent.trim() === "") {
+      if (checkItem.textContent.trim() === "") {
         const p = document.createElement("div");
         p.innerHTML = "<br>";
         checkItem.after(p);
@@ -1144,11 +1146,10 @@
         sel.addRange(r);
         return;
       }
-      const nc = makeCheckItem("");
-      const ns = nc.querySelector(".rte-check-label");
+      const nc = makeCheckDiv("");
       checkItem.after(nc);
       const r = document.createRange();
-      r.setStart(ns, 0);
+      r.setStart(nc, 0);
       r.collapse(true);
       sel.removeAllRanges();
       sel.addRange(r);
@@ -1158,7 +1159,7 @@
     editor.addEventListener("mouseup", updateRteToolbarState);
   }
 
-  // ---------- Modal ----------
+    // ---------- Modal ----------
   let editingCardId = null;
   let editingColId = null;
   let modalAttachments = { canvases: [], charts: [], decks: [] };

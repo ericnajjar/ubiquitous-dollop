@@ -329,14 +329,25 @@ a { color: inherit; text-decoration: none; }
 
 /* Checkbox items — used in RTE and card face */
 .rte-check {
-  display: flex; align-items: flex-start; gap: 6px; margin: 3px 0;
+  display: block; position: relative;
+  padding-left: 24px; margin: 3px 0; min-height: 20px;
 }
-.rte-check input[type="checkbox"] {
-  width: 14px; height: 14px; margin: 3px 0 0; flex-shrink: 0;
-  accent-color: var(--accent); cursor: pointer;
+.rte-check::before {
+  content: '';
+  position: absolute; left: 0; top: 3px;
+  width: 14px; height: 14px;
+  border: 1.5px solid rgba(154, 164, 199, 0.4);
+  border-radius: 3px; background: transparent;
+  box-sizing: border-box; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
 }
-.rte-check input[type="checkbox"]:checked + .rte-check-label { text-decoration: line-through; opacity: 0.5; }
-.rte-check-label { flex: 1; min-width: 0; word-break: break-word; }
+.rte-check:hover::before { border-color: var(--accent); }
+.rte-check[data-checked="true"]::before {
+  background: var(--accent); border-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%23fff' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 10px 10px; background-repeat: no-repeat; background-position: center;
+}
+.rte-check[data-checked="true"] { text-decoration: line-through; opacity: 0.55; }
 
 /* Card face — description rendered as HTML */
 .card-desc b, .card-desc strong { font-weight: 700; }
