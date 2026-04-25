@@ -224,6 +224,7 @@
     const titleInput = document.getElementById("docTitle");
     const deleteBtn = document.getElementById("deleteDocBtn");
     const addStoryBtn = document.getElementById("addStoryBtn");
+    const addTaskBtn2 = document.getElementById("addTaskBtn2");
 
     const editorHeader = document.getElementById("editorHeader");
 
@@ -238,6 +239,7 @@
       titleInput.disabled = true;
       deleteBtn.hidden = true;
       addStoryBtn.hidden = true;
+      if (addTaskBtn2) addTaskBtn2.hidden = true;
       populateProjectSelect("");
       populateFolderSelect("");
       return;
@@ -250,6 +252,7 @@
     titleInput.value = doc.title;
     deleteBtn.hidden = false;
     addStoryBtn.hidden = false;
+    if (addTaskBtn2) addTaskBtn2.hidden = false;
     populateProjectSelect(doc.projectId || "");
     populateFolderSelect(doc.folderId || "");
 
@@ -491,7 +494,7 @@
 
     if (!doc.tasks) doc.tasks = [];
     if (!doc.taskColumns) doc.taskColumns = [];
-    area.hidden = false;
+    area.hidden = !doc.tasks.length && !doc.taskColumns.length;
     list.innerHTML = "";
 
     if (colChips) {
@@ -1258,6 +1261,7 @@
     document.getElementById("newFolderBtn").addEventListener("click", createFolder);
     document.getElementById("addStoryBtn").addEventListener("click", addStory);
     document.getElementById("addTaskBtn").addEventListener("click", addTask);
+    document.getElementById("addTaskBtn2").addEventListener("click", addTask);
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
     document.getElementById("addColBtn").addEventListener("click", (e) => {
       e.stopPropagation();
