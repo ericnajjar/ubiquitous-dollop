@@ -1254,11 +1254,16 @@
   // ---------- Comments ----------
   let pendingCommentRange = null;
 
-  function getAuthorName() {
+  function getAuthorInfo() {
+    let name = "";
+    let email = "";
     try {
       const profile = JSON.parse(localStorage.getItem("datascope_profile")) || {};
-      return profile.name || "Anonymous";
-    } catch (_) { return "Anonymous"; }
+      name = profile.name || "";
+    } catch (_) {}
+    const ds = window.datascope;
+    if (ds && ds._sessionEmail) email = ds._sessionEmail;
+    return { name: name || email || "Anonymous", email };
   }
 
   function getDocComments() {
@@ -1310,10 +1315,10 @@
     quote.textContent = comment.selectedText;
     card.appendChild(quote);
 
-    const authorName = comment.author || "Anonymous";
     const authorEl = document.createElement("span");
     authorEl.className = "comment-author";
-    authorEl.textContent = authorName;
+    authorEl.textContent = comment.author || "Anonymous";
+    if (comment.email) authorEl.title = comment.email;
     card.appendChild(authorEl);
 
     const text = document.createElement("div");
@@ -1407,6 +1412,7 @@
     const author = document.createElement("span");
     author.className = "reply-author";
     author.textContent = reply.author || "Anonymous";
+    if (reply.email) author.title = reply.email;
     const time = document.createElement("span");
     time.className = "reply-time";
     time.textContent = formatCommentTime(reply.createdAt);
@@ -1435,9 +1441,11 @@
 
   function addReply(comment, text) {
     if (!comment.replies) comment.replies = [];
+    const authorInfo = getAuthorInfo();
     comment.replies.push({
       id: uid(),
-      author: getAuthorName(),
+      author: authorInfo.name,
+      email: authorInfo.email,
       text,
       createdAt: new Date().toISOString(),
     });
@@ -1461,9 +1469,11 @@
     if (!doc.comments) doc.comments = [];
 
     const commentId = uid();
+    const authorInfo = getAuthorInfo();
     const comment = {
       id: commentId,
-      author: getAuthorName(),
+      author: authorInfo.name,
+      email: authorInfo.email,
       selectedText,
       text: "",
       replies: [],

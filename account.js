@@ -60,6 +60,7 @@
     getSession().then(async session => {
       if (!session) return;
       const email = session.user.email;
+      ds._sessionEmail = email;
       const profile = getProfile();
 
       await ds.loadUserTeams();
