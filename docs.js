@@ -15,8 +15,22 @@
     return [];
   }
 
+  const FOLDERS_KEY = "datascope_doc_folders";
+
   function saveDocs() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state.docs)); } catch (_) {}
+  }
+
+  function loadFolders() {
+    try {
+      const raw = localStorage.getItem(FOLDERS_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return [];
+  }
+
+  function saveFolders() {
+    try { localStorage.setItem(FOLDERS_KEY, JSON.stringify(state.folders)); } catch (_) {}
   }
 
   function loadProjects() {
@@ -29,7 +43,9 @@
 
   const state = {
     docs: loadDocs(),
+    folders: loadFolders(),
     currentDocId: null,
+    openFolders: new Set(),
   };
 
   function currentDoc() {
@@ -43,24 +59,152 @@
 
   // ---------- Sidebar ----------
   function renderSidebar() {
-    const list = document.getElementById("docList");
+    const list = document.getElementById("sidebarList");
     const empty = document.getElementById("docListEmpty");
     list.innerHTML = "";
 
     const docs = teamFilteredDocs();
-    if (!docs.length) { empty.hidden = false; return; }
+    const teamId = window.datascope?.activeTeamId || null;
+    const folders = state.folders.filter(f => (f.teamId || null) === teamId);
+
+    if (!docs.length && !folders.length) { empty.hidden = false; return; }
     empty.hidden = true;
 
-    docs.forEach((doc) => {
-      const li = document.createElement("li");
-      li.className = "doc-item" + (doc.id === state.currentDocId ? " active" : "");
-      li.innerHTML = `
-        <span class="doc-item-title">${escapeHtml(doc.title || "Untitled")}</span>
-        <span class="doc-item-count">${doc.stories.length} stor${doc.stories.length !== 1 ? "ies" : "y"}</span>
-      `;
-      li.addEventListener("click", () => selectDoc(doc.id));
-      list.appendChild(li);
+    folders.forEach(folder => {
+      const docsInFolder = docs.filter(d => d.folderId === folder.id);
+      list.appendChild(buildSidebarFolder(folder, docsInFolder));
     });
+
+    const ungrouped = docs.filter(d => !d.folderId || !folders.find(f => f.id === d.folderId));
+    ungrouped.forEach(doc => {
+      list.appendChild(buildSidebarDoc(doc, false));
+    });
+  }
+
+  function buildSidebarDoc(doc, nested) {
+    const el = document.createElement("div");
+    el.className = "sidebar-doc" + (nested ? " nested" : "") + (doc.id === state.currentDocId ? " active" : "");
+    const name = document.createElement("span");
+    name.className = "sidebar-doc-name";
+    name.textContent = doc.title || "Untitled";
+    const arrow = document.createElement("span");
+    arrow.className = "sidebar-doc-arrow";
+    arrow.textContent = "›";
+    el.appendChild(name);
+    el.appendChild(arrow);
+    el.addEventListener("click", () => selectDoc(doc.id));
+    return el;
+  }
+
+  function buildSidebarFolder(folder, docs) {
+    const el = document.createElement("div");
+    el.className = "sidebar-folder" + (state.openFolders.has(folder.id) ? " open" : "");
+
+    const header = document.createElement("div");
+    header.className = "sidebar-folder-header";
+
+    const toggle = document.createElement("span");
+    toggle.className = "sidebar-folder-toggle";
+    toggle.textContent = "▸";
+
+    const name = document.createElement("span");
+    name.className = "sidebar-folder-name";
+    name.textContent = folder.name || "Untitled Folder";
+
+    const count = document.createElement("span");
+    count.className = "sidebar-folder-count";
+    count.textContent = docs.length || "";
+
+    const actions = document.createElement("div");
+    actions.className = "sidebar-folder-actions";
+
+    const renameBtn = document.createElement("button");
+    renameBtn.className = "sidebar-folder-action";
+    renameBtn.textContent = "✎";
+    renameBtn.title = "Rename folder";
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startFolderRename(folder, name);
+    });
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "sidebar-folder-action danger";
+    delBtn.textContent = "×";
+    delBtn.title = "Delete folder";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteFolder(folder.id);
+    });
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(delBtn);
+
+    header.appendChild(toggle);
+    header.appendChild(name);
+    header.appendChild(count);
+    header.appendChild(actions);
+    el.appendChild(header);
+
+    const children = document.createElement("div");
+    children.className = "sidebar-folder-children";
+    docs.forEach(doc => {
+      children.appendChild(buildSidebarDoc(doc, true));
+    });
+    el.appendChild(children);
+
+    header.addEventListener("click", () => {
+      if (state.openFolders.has(folder.id)) {
+        state.openFolders.delete(folder.id);
+      } else {
+        state.openFolders.add(folder.id);
+      }
+      el.classList.toggle("open", state.openFolders.has(folder.id));
+    });
+
+    return el;
+  }
+
+  function startFolderRename(folder, nameEl) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "sidebar-folder-rename";
+    input.value = folder.name;
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    function finish() {
+      const val = input.value.trim();
+      if (val) folder.name = val;
+      saveFolders();
+      renderSidebar();
+    }
+    input.addEventListener("blur", finish);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { input.value = folder.name; input.blur(); }
+    });
+  }
+
+  // ---------- Folder actions ----------
+  function createFolder() {
+    const teamId = window.datascope?.activeTeamId || null;
+    const folder = { id: uid(), teamId, name: "New Folder" };
+    state.folders.push(folder);
+    state.openFolders.add(folder.id);
+    saveFolders();
+    renderSidebar();
+    const el = document.querySelector(`.sidebar-folder-name`);
+    if (el) startFolderRename(folder, el);
+  }
+
+  function deleteFolder(folderId) {
+    if (!confirm("Delete this folder? Documents inside will be moved out, not deleted.")) return;
+    state.docs.forEach(d => { if (d.folderId === folderId) d.folderId = null; });
+    state.folders = state.folders.filter(f => f.id !== folderId);
+    saveDocs();
+    saveFolders();
+    renderSidebar();
   }
 
   // ---------- Editor ----------
@@ -81,8 +225,11 @@
     const deleteBtn = document.getElementById("deleteDocBtn");
     const addStoryBtn = document.getElementById("addStoryBtn");
 
+    const editorHeader = document.getElementById("editorHeader");
+
     if (!doc) {
       emptyMsg.hidden = false;
+      editorHeader.hidden = true;
       proseArea.hidden = true;
       document.getElementById("tasksArea").hidden = true;
       divider.hidden = true;
@@ -92,16 +239,19 @@
       deleteBtn.hidden = true;
       addStoryBtn.hidden = true;
       populateProjectSelect("");
+      populateFolderSelect("");
       return;
     }
 
     emptyMsg.hidden = true;
+    editorHeader.hidden = false;
     proseArea.hidden = false;
     titleInput.disabled = false;
     titleInput.value = doc.title;
     deleteBtn.hidden = false;
     addStoryBtn.hidden = false;
     populateProjectSelect(doc.projectId || "");
+    populateFolderSelect(doc.folderId || "");
 
     const moveWrap = document.getElementById("docMoveWrap");
     moveWrap.innerHTML = "";
@@ -931,6 +1081,21 @@
     });
   }
 
+  function populateFolderSelect(selectedId) {
+    const sel = document.getElementById("docFolder");
+    if (!sel) return;
+    const teamId = window.datascope?.activeTeamId || null;
+    const folders = state.folders.filter(f => (f.teamId || null) === teamId);
+    sel.innerHTML = '<option value="">No Folder</option>';
+    folders.forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f.id;
+      opt.textContent = f.name;
+      if (f.id === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
   // ---------- Actions ----------
   function createDoc() {
     const doc = {
@@ -1090,6 +1255,7 @@
     renderEditor();
 
     document.getElementById("newDocBtn").addEventListener("click", createDoc);
+    document.getElementById("newFolderBtn").addEventListener("click", createFolder);
     document.getElementById("addStoryBtn").addEventListener("click", addStory);
     document.getElementById("addTaskBtn").addEventListener("click", addTask);
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
@@ -1133,6 +1299,17 @@
       doc.projectId = document.getElementById("docProject").value;
       saveDocs();
     });
+
+    const folderSel = document.getElementById("docFolder");
+    if (folderSel) {
+      folderSel.addEventListener("change", () => {
+        const doc = currentDoc();
+        if (!doc) return;
+        doc.folderId = folderSel.value || null;
+        saveDocs();
+        renderSidebar();
+      });
+    }
 
     document.addEventListener("datascope:teamchange", () => {
       const docs = teamFilteredDocs();

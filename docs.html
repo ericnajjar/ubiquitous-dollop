@@ -38,24 +38,33 @@
     <aside class="docs-sidebar" id="sidebar">
       <div class="sidebar-header">
         <h3>Documents</h3>
-        <button type="button" class="btn btn-ghost btn-sm" id="newDocBtn">+ New</button>
+        <div class="sidebar-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="newFolderBtn" title="New folder">📁</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="newDocBtn">+ New</button>
+        </div>
       </div>
-      <ul class="doc-list" id="docList"></ul>
+      <div class="sidebar-list" id="sidebarList"></div>
       <p class="doc-list-empty" id="docListEmpty" hidden>No documents yet.</p>
     </aside>
 
     <section class="docs-editor" id="editorPanel">
-      <div class="editor-header">
+      <div class="editor-header" id="editorHeader">
         <input type="text" class="editor-title" id="docTitle" placeholder="Document title…" autocomplete="off" />
         <div class="editor-actions">
           <div class="editor-field">
-            <label for="docProject">Project</label>
+            <label for="docFolder">Folder</label>
+            <select id="docFolder">
+              <option value="">No Folder</option>
+            </select>
+          </div>
+          <div class="editor-field">
+            <label for="docProject">Collection</label>
             <select id="docProject">
               <option value="">None</option>
             </select>
           </div>
           <div class="editor-field team-move-wrap" id="docMoveWrap"></div>
-          <button type="button" class="btn btn-ghost btn-sm" id="addStoryBtn">+ Story</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="addStoryBtn">Add Tasks</button>
           <button type="button" class="btn btn-ghost btn-sm danger" id="deleteDocBtn">Delete</button>
         </div>
       </div>
