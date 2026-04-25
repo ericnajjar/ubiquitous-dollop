@@ -1254,6 +1254,13 @@
   // ---------- Comments ----------
   let pendingCommentRange = null;
 
+  function getAuthorName() {
+    try {
+      const profile = JSON.parse(localStorage.getItem("datascope_profile")) || {};
+      return profile.name || "Anonymous";
+    } catch (_) { return "Anonymous"; }
+  }
+
   function getDocComments() {
     const doc = currentDoc();
     if (!doc) return [];
@@ -1303,6 +1310,12 @@
     quote.textContent = comment.selectedText;
     card.appendChild(quote);
 
+    const authorName = comment.author || "Anonymous";
+    const authorEl = document.createElement("span");
+    authorEl.className = "comment-author";
+    authorEl.textContent = authorName;
+    card.appendChild(authorEl);
+
     const text = document.createElement("div");
     text.className = "comment-text";
     text.contentEditable = "true";
@@ -1321,11 +1334,9 @@
 
     const footer = document.createElement("div");
     footer.className = "comment-footer";
-
     const time = document.createElement("span");
     time.className = "comment-time";
     time.textContent = formatCommentTime(comment.createdAt);
-
     const actions = document.createElement("div");
     actions.className = "comment-actions";
     const delBtn = document.createElement("button");
@@ -1337,17 +1348,101 @@
       deleteComment(comment.id);
     });
     actions.appendChild(delBtn);
-
     footer.appendChild(time);
     footer.appendChild(actions);
     card.appendChild(footer);
 
+    if (!comment.replies) comment.replies = [];
+    if (comment.replies.length) {
+      const repliesWrap = document.createElement("div");
+      repliesWrap.className = "comment-replies";
+      comment.replies.forEach(reply => {
+        repliesWrap.appendChild(buildReplyBubble(comment, reply));
+      });
+      card.appendChild(repliesWrap);
+    }
+
+    const replyBar = document.createElement("div");
+    replyBar.className = "comment-reply-bar";
+    const replyInput = document.createElement("input");
+    replyInput.type = "text";
+    replyInput.className = "comment-reply-input";
+    replyInput.placeholder = "Reply…";
+    replyInput.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const val = replyInput.value.trim();
+      if (!val) return;
+      addReply(comment, val);
+      replyInput.value = "";
+    });
+    const replyBtn = document.createElement("button");
+    replyBtn.className = "comment-reply-btn";
+    replyBtn.textContent = "↵";
+    replyBtn.title = "Send reply";
+    replyBtn.addEventListener("click", () => {
+      const val = replyInput.value.trim();
+      if (!val) { replyInput.focus(); return; }
+      addReply(comment, val);
+      replyInput.value = "";
+    });
+    replyBar.appendChild(replyInput);
+    replyBar.appendChild(replyBtn);
+    card.appendChild(replyBar);
+
     card.addEventListener("click", (e) => {
-      if (e.target === text || text.contains(e.target)) return;
+      if (e.target.closest(".comment-text, .comment-reply-input, .comment-reply-btn, .comment-action-btn, .reply-del-btn")) return;
       highlightCommentInProse(comment.id);
     });
 
     return card;
+  }
+
+  function buildReplyBubble(comment, reply) {
+    const el = document.createElement("div");
+    el.className = "comment-reply";
+
+    const header = document.createElement("div");
+    header.className = "reply-header";
+    const author = document.createElement("span");
+    author.className = "reply-author";
+    author.textContent = reply.author || "Anonymous";
+    const time = document.createElement("span");
+    time.className = "reply-time";
+    time.textContent = formatCommentTime(reply.createdAt);
+    const delBtn = document.createElement("button");
+    delBtn.className = "reply-del-btn";
+    delBtn.textContent = "×";
+    delBtn.title = "Delete reply";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      comment.replies = comment.replies.filter(r => r.id !== reply.id);
+      saveDocs();
+      renderComments();
+    });
+    header.appendChild(author);
+    header.appendChild(time);
+    header.appendChild(delBtn);
+    el.appendChild(header);
+
+    const body = document.createElement("p");
+    body.className = "reply-text";
+    body.textContent = reply.text;
+    el.appendChild(body);
+
+    return el;
+  }
+
+  function addReply(comment, text) {
+    if (!comment.replies) comment.replies = [];
+    comment.replies.push({
+      id: uid(),
+      author: getAuthorName(),
+      text,
+      createdAt: new Date().toISOString(),
+    });
+    saveDocs();
+    renderComments();
   }
 
   function formatCommentTime(iso) {
@@ -1368,8 +1463,10 @@
     const commentId = uid();
     const comment = {
       id: commentId,
+      author: getAuthorName(),
       selectedText,
       text: "",
+      replies: [],
       createdAt: new Date().toISOString(),
     };
     doc.comments.push(comment);
