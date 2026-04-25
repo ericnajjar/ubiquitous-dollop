@@ -332,6 +332,7 @@
     });
 
     setupImageDropZones();
+    reapplyHighlights();
   }
 
   function thumbEsc(s) {
@@ -550,6 +551,7 @@
     renderControls();
     renderDeckProjectSelect();
     renderDeckLibrary();
+    renderComments();
   }
 
   // ---------- Project operations ----------
@@ -607,6 +609,7 @@
     renderSlideList();
     renderSlidePreview();
     renderControls();
+    renderComments();
   }
 
   function prevSlide() {
@@ -1082,6 +1085,327 @@ Guidelines:
     return slides;
   }
 
+  // ---------- Comments ----------
+  function getAuthorInfo() {
+    let name = "";
+    let email = "";
+    try {
+      const profile = JSON.parse(localStorage.getItem("datascope_profile")) || {};
+      name = profile.name || "";
+    } catch (_) {}
+    const ds = window.datascope;
+    if (ds && ds._sessionEmail) email = ds._sessionEmail;
+    return { name: name || email || "Anonymous", email };
+  }
+
+  function ensureSlideComments(slide) {
+    if (!Array.isArray(slide.comments)) slide.comments = [];
+    return slide.comments;
+  }
+
+  function renderComments() {
+    const slide = currentSlide();
+    const panel = document.getElementById("commentsPanel");
+    const list = document.getElementById("commentsList");
+    const empty = document.getElementById("commentsEmpty");
+    const countEl = document.getElementById("commentsCount");
+    const app = document.querySelector(".app");
+
+    if (!slide) {
+      panel.hidden = true;
+      app.classList.remove("has-comments");
+      return;
+    }
+
+    const comments = ensureSlideComments(slide);
+    if (!comments.length) {
+      panel.hidden = true;
+      app.classList.remove("has-comments");
+      return;
+    }
+
+    panel.hidden = false;
+    app.classList.add("has-comments");
+    countEl.textContent = comments.length;
+    empty.hidden = comments.length > 0;
+
+    list.innerHTML = "";
+    comments.forEach((comment, ci) => {
+      list.appendChild(buildCommentCard(comment, ci));
+    });
+  }
+
+  function buildCommentCard(comment, index) {
+    const card = document.createElement("div");
+    card.className = "comment-card";
+
+    if (comment.selectedText) {
+      const quote = document.createElement("div");
+      quote.className = "comment-quote";
+      quote.textContent = comment.selectedText;
+      card.appendChild(quote);
+    }
+
+    const author = document.createElement("div");
+    author.className = "comment-author";
+    author.textContent = comment.author || "Anonymous";
+    if (comment.email) author.title = comment.email;
+    card.appendChild(author);
+
+    const text = document.createElement("div");
+    text.className = "comment-text";
+    text.contentEditable = "true";
+    text.textContent = comment.text || "";
+    text.addEventListener("blur", () => {
+      comment.text = text.textContent.trim();
+      saveState();
+    });
+    card.appendChild(text);
+
+    const footer = document.createElement("div");
+    footer.className = "comment-footer";
+    const time = document.createElement("span");
+    time.className = "comment-time";
+    time.textContent = formatTime(comment.createdAt);
+    footer.appendChild(time);
+
+    const del = document.createElement("button");
+    del.className = "comment-delete";
+    del.textContent = "×";
+    del.title = "Delete comment";
+    del.addEventListener("click", () => {
+      const slide = currentSlide();
+      if (!slide) return;
+      ensureSlideComments(slide).splice(index, 1);
+      removeHighlight(comment.id);
+      saveState();
+      renderComments();
+    });
+    footer.appendChild(del);
+    card.appendChild(footer);
+
+    if (comment.replies && comment.replies.length) {
+      const repliesWrap = document.createElement("div");
+      repliesWrap.className = "comment-replies";
+      comment.replies.forEach((reply, ri) => {
+        repliesWrap.appendChild(buildReplyBubble(reply, comment, ri));
+      });
+      card.appendChild(repliesWrap);
+    }
+
+    const replyBar = document.createElement("div");
+    replyBar.className = "comment-reply-bar";
+    const replyInput = document.createElement("input");
+    replyInput.className = "comment-reply-input";
+    replyInput.placeholder = "Reply…";
+    const replyBtn = document.createElement("button");
+    replyBtn.className = "comment-reply-btn";
+    replyBtn.textContent = "Reply";
+    replyBtn.addEventListener("click", () => addReply(comment, replyInput));
+    replyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") addReply(comment, replyInput);
+    });
+    replyBar.appendChild(replyInput);
+    replyBar.appendChild(replyBtn);
+    card.appendChild(replyBar);
+
+    card.addEventListener("mouseenter", () => {
+      const mark = document.querySelector(`mark[data-comment-id="${comment.id}"]`);
+      if (mark) mark.style.background = "rgba(139,92,246,0.45)";
+    });
+    card.addEventListener("mouseleave", () => {
+      const mark = document.querySelector(`mark[data-comment-id="${comment.id}"]`);
+      if (mark) mark.style.background = "";
+    });
+
+    return card;
+  }
+
+  function buildReplyBubble(reply, comment, ri) {
+    const wrap = document.createElement("div");
+    wrap.className = "comment-reply";
+
+    const header = document.createElement("div");
+    header.className = "reply-header";
+
+    const left = document.createElement("span");
+    const authorSpan = document.createElement("span");
+    authorSpan.className = "reply-author";
+    authorSpan.textContent = reply.author || "Anonymous";
+    if (reply.email) authorSpan.title = reply.email;
+    left.appendChild(authorSpan);
+
+    const timeSpan = document.createElement("span");
+    timeSpan.className = "reply-time";
+    timeSpan.textContent = " · " + formatTime(reply.createdAt);
+    left.appendChild(timeSpan);
+    header.appendChild(left);
+
+    const del = document.createElement("button");
+    del.className = "reply-delete";
+    del.textContent = "×";
+    del.addEventListener("click", () => {
+      comment.replies.splice(ri, 1);
+      saveState();
+      renderComments();
+    });
+    header.appendChild(del);
+    wrap.appendChild(header);
+
+    const text = document.createElement("div");
+    text.className = "reply-text";
+    text.textContent = reply.text;
+    wrap.appendChild(text);
+
+    return wrap;
+  }
+
+  function addReply(comment, input) {
+    const text = input.value.trim();
+    if (!text) return;
+    if (!Array.isArray(comment.replies)) comment.replies = [];
+    const authorInfo = getAuthorInfo();
+    comment.replies.push({
+      id: uid(),
+      author: authorInfo.name,
+      email: authorInfo.email,
+      text,
+      createdAt: new Date().toISOString(),
+    });
+    input.value = "";
+    saveState();
+    renderComments();
+  }
+
+  function formatTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+  }
+
+  function removeHighlight(commentId) {
+    const preview = document.getElementById("slidePreview");
+    const marks = preview.querySelectorAll(`mark[data-comment-id="${commentId}"]`);
+    marks.forEach(mark => {
+      const parent = mark.parentNode;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+    });
+  }
+
+  function reapplyHighlights() {
+    const slide = currentSlide();
+    if (!slide || !slide.comments) return;
+    const preview = document.getElementById("slidePreview");
+    const applied = new Set();
+    slide.comments.forEach(comment => {
+      if (!comment.selectedText || applied.has(comment.id)) return;
+      const fields = preview.querySelectorAll("[contenteditable]");
+      for (const field of fields) {
+        if (wrapTextInNode(field, comment.selectedText, comment.id)) {
+          applied.add(comment.id);
+          break;
+        }
+      }
+    });
+  }
+
+  function wrapTextInNode(root, needle, commentId) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const idx = node.textContent.indexOf(needle);
+      if (idx === -1) continue;
+      const range = document.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + needle.length);
+      const mark = document.createElement("mark");
+      mark.setAttribute("data-comment-id", commentId);
+      range.surroundContents(mark);
+      return true;
+    }
+    return false;
+  }
+
+  // ---------- Context menu for comments ----------
+  let pendingCommentRange = null;
+
+  function setupContextMenu() {
+    const preview = document.getElementById("slidePreview");
+    const menu = document.getElementById("slideContextMenu");
+    const addBtn = document.getElementById("ctxAddComment");
+
+    preview.addEventListener("contextmenu", (e) => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+
+      const range = sel.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      const node = container.nodeType === 3 ? container.parentElement : container;
+      if (!node.closest || !node.closest("#slidePreview [contenteditable]")) return;
+
+      e.preventDefault();
+      pendingCommentRange = range.cloneRange();
+      menu.hidden = false;
+      menu.style.left = e.clientX + "px";
+      menu.style.top = e.clientY + "px";
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!menu.hidden && !menu.contains(e.target)) {
+        menu.hidden = true;
+        pendingCommentRange = null;
+      }
+    });
+
+    addBtn.addEventListener("click", () => {
+      menu.hidden = true;
+      if (!pendingCommentRange) return;
+      createComment(pendingCommentRange);
+      pendingCommentRange = null;
+    });
+  }
+
+  function createComment(range) {
+    const slide = currentSlide();
+    if (!slide) return;
+
+    const selectedText = range.toString().trim();
+    if (!selectedText) return;
+
+    const commentId = uid();
+    const mark = document.createElement("mark");
+    mark.setAttribute("data-comment-id", commentId);
+    try {
+      range.surroundContents(mark);
+    } catch (_) {
+      mark.textContent = selectedText;
+      range.deleteContents();
+      range.insertNode(mark);
+    }
+
+    saveFieldsFromDOM();
+
+    const authorInfo = getAuthorInfo();
+    ensureSlideComments(slide).push({
+      id: commentId,
+      author: authorInfo.name,
+      email: authorInfo.email,
+      selectedText,
+      text: "",
+      replies: [],
+      createdAt: new Date().toISOString(),
+    });
+
+    saveState();
+    renderComments();
+    window.getSelection().removeAllRanges();
+  }
+
   // ---------- Keyboard nav ----------
   function onKeyDown(e) {
     if (e.key === "Escape") { closeGenModal(); return; }
@@ -1098,6 +1422,7 @@ Guidelines:
     checkChartImport();
 
     renderAll();
+    setupContextMenu();
 
     // Project controls
     document.getElementById("projectSelect").addEventListener("change", (e) => switchProject(Number(e.target.value)));
