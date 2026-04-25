@@ -242,6 +242,7 @@
       if (addTaskBtn2) addTaskBtn2.hidden = true;
       populateProjectSelect("");
       populateFolderSelect("");
+      renderComments();
       return;
     }
 
@@ -287,6 +288,8 @@
     doc.stories.forEach((story, idx) => {
       container.appendChild(buildStoryBlock(story, idx));
     });
+
+    renderComments();
   }
 
   // ---------- Tasks ----------
@@ -1248,6 +1251,236 @@
     return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  // ---------- Comments ----------
+  let pendingCommentRange = null;
+
+  function getDocComments() {
+    const doc = currentDoc();
+    if (!doc) return [];
+    if (!doc.comments) doc.comments = [];
+    return doc.comments;
+  }
+
+  function renderComments() {
+    const doc = currentDoc();
+    const panel = document.getElementById("commentsPanel");
+    const list = document.getElementById("commentsList");
+    const empty = document.getElementById("commentsEmpty");
+    const countEl = document.getElementById("commentsCount");
+    const app = document.querySelector(".docs-app");
+
+    if (!doc) {
+      panel.hidden = true;
+      app.classList.remove("has-comments");
+      return;
+    }
+
+    const comments = getDocComments();
+    if (!comments.length) {
+      panel.hidden = true;
+      app.classList.remove("has-comments");
+      return;
+    }
+
+    panel.hidden = false;
+    app.classList.add("has-comments");
+    countEl.textContent = comments.length;
+    list.innerHTML = "";
+    empty.hidden = comments.length > 0;
+
+    comments.forEach(comment => {
+      list.appendChild(buildCommentCard(comment));
+    });
+  }
+
+  function buildCommentCard(comment) {
+    const card = document.createElement("div");
+    card.className = "comment-card";
+    card.dataset.commentId = comment.id;
+
+    const quote = document.createElement("p");
+    quote.className = "comment-quote";
+    quote.textContent = comment.selectedText;
+    card.appendChild(quote);
+
+    const text = document.createElement("div");
+    text.className = "comment-text";
+    text.contentEditable = "true";
+    text.textContent = comment.text;
+    text.addEventListener("input", () => {
+      comment.text = text.textContent;
+      saveDocs();
+    });
+    text.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        text.blur();
+      }
+    });
+    card.appendChild(text);
+
+    const footer = document.createElement("div");
+    footer.className = "comment-footer";
+
+    const time = document.createElement("span");
+    time.className = "comment-time";
+    time.textContent = formatCommentTime(comment.createdAt);
+
+    const actions = document.createElement("div");
+    actions.className = "comment-actions";
+    const delBtn = document.createElement("button");
+    delBtn.className = "comment-action-btn";
+    delBtn.textContent = "×";
+    delBtn.title = "Delete comment";
+    delBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      deleteComment(comment.id);
+    });
+    actions.appendChild(delBtn);
+
+    footer.appendChild(time);
+    footer.appendChild(actions);
+    card.appendChild(footer);
+
+    card.addEventListener("click", (e) => {
+      if (e.target === text || text.contains(e.target)) return;
+      highlightCommentInProse(comment.id);
+    });
+
+    return card;
+  }
+
+  function formatCommentTime(iso) {
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 60000) return "Just now";
+    if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
+    if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
+    return d.toLocaleDateString();
+  }
+
+  function addComment(selectedText, range) {
+    const doc = currentDoc();
+    if (!doc) return;
+    if (!doc.comments) doc.comments = [];
+
+    const commentId = uid();
+    const comment = {
+      id: commentId,
+      selectedText,
+      text: "",
+      createdAt: new Date().toISOString(),
+    };
+    doc.comments.push(comment);
+
+    wrapRangeWithMark(range, commentId);
+
+    doc.body = document.getElementById("docProse").innerHTML;
+    saveDocs();
+    renderComments();
+
+    setTimeout(() => {
+      const card = document.querySelector(`.comment-card[data-comment-id="${commentId}"]`);
+      if (card) {
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.querySelector(".comment-text")?.focus();
+      }
+    }, 50);
+  }
+
+  function wrapRangeWithMark(range, commentId) {
+    const mark = document.createElement("mark");
+    mark.dataset.commentId = commentId;
+    range.surroundContents(mark);
+  }
+
+  function deleteComment(commentId) {
+    const doc = currentDoc();
+    if (!doc) return;
+    doc.comments = (doc.comments || []).filter(c => c.id !== commentId);
+
+    const prose = document.getElementById("docProse");
+    const marks = prose.querySelectorAll(`mark[data-comment-id="${commentId}"]`);
+    marks.forEach(mark => {
+      const parent = mark.parentNode;
+      while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+      parent.removeChild(mark);
+    });
+
+    doc.body = prose.innerHTML;
+    saveDocs();
+    renderComments();
+  }
+
+  function highlightCommentInProse(commentId) {
+    const prose = document.getElementById("docProse");
+    prose.querySelectorAll("mark.comment-active").forEach(m => m.classList.remove("comment-active"));
+    document.querySelectorAll(".comment-card.active").forEach(c => c.classList.remove("active"));
+
+    const mark = prose.querySelector(`mark[data-comment-id="${commentId}"]`);
+    if (mark) {
+      mark.classList.add("comment-active");
+      mark.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    const card = document.querySelector(`.comment-card[data-comment-id="${commentId}"]`);
+    if (card) card.classList.add("active");
+  }
+
+  function setupContextMenu() {
+    const prose = document.getElementById("docProse");
+    const menu = document.getElementById("docContextMenu");
+    const addCommentBtn = document.getElementById("ctxAddComment");
+
+    prose.addEventListener("contextmenu", (e) => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+
+      const range = sel.getRangeAt(0);
+      if (!prose.contains(range.commonAncestorContainer)) return;
+
+      e.preventDefault();
+      pendingCommentRange = range.cloneRange();
+
+      menu.hidden = false;
+      menu.style.left = Math.min(e.clientX, window.innerWidth - 170) + "px";
+      menu.style.top = Math.min(e.clientY, window.innerHeight - 50) + "px";
+    });
+
+    addCommentBtn.addEventListener("click", () => {
+      menu.hidden = true;
+      if (!pendingCommentRange) return;
+
+      const sel = window.getSelection();
+      const selectedText = pendingCommentRange.toString().trim();
+      if (!selectedText) { pendingCommentRange = null; return; }
+
+      try {
+        addComment(selectedText, pendingCommentRange);
+      } catch (_) {
+        addComment(selectedText, pendingCommentRange);
+      }
+
+      if (sel) sel.removeAllRanges();
+      pendingCommentRange = null;
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!menu.contains(e.target)) menu.hidden = true;
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") menu.hidden = true;
+    });
+
+    prose.addEventListener("click", (e) => {
+      const mark = e.target.closest("mark[data-comment-id]");
+      if (mark) {
+        highlightCommentInProse(mark.dataset.commentId);
+      }
+    });
+  }
+
   // ---------- Init ----------
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
@@ -1256,6 +1489,7 @@
 
     renderSidebar();
     renderEditor();
+    setupContextMenu();
 
     document.getElementById("newDocBtn").addEventListener("click", createDoc);
     document.getElementById("newFolderBtn").addEventListener("click", createFolder);
