@@ -559,13 +559,18 @@
 
     // Draw text
     if (s.label) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(s.x, s.y, s.w, s.h);
+      ctx.clip();
       const align = s.textAlign || "center";
       ctx.fillStyle = s.textColor || "#e7ecff";
       ctx.font = `${s.fontSize || 14}px Inter, system-ui, sans-serif`;
       ctx.textAlign = align;
       ctx.textBaseline = "middle";
       const tx = align === "left" ? s.x + 8 : align === "right" ? s.x + s.w - 8 : s.x + s.w / 2;
-      wrapText(s.label, tx, s.y + s.h / 2, s.w - 16, s.fontSize || 14);
+      wrapText(s.label, tx, s.y + s.h / 2, s.w - 16, s.fontSize || 14, s.h);
+      ctx.restore();
     }
   }
 
@@ -672,10 +677,11 @@
     ctx.closePath();
   }
 
-  function wrapText(text, cx, cy, maxWidth, fontSize) {
+  function wrapText(text, cx, cy, maxWidth, fontSize, shapeH) {
     const lines = text.split("\n");
     const allLines = [];
     lines.forEach((line) => {
+      if (!line.trim()) { allLines.push(""); return; }
       const words = line.split(" ");
       let current = "";
       words.forEach((word) => {
@@ -692,7 +698,10 @@
 
     const lineH = fontSize * 1.3;
     const totalH = allLines.length * lineH;
-    const startY = cy - totalH / 2 + lineH / 2;
+    const fitsInShape = !shapeH || totalH <= shapeH - 16;
+    const startY = fitsInShape
+      ? cy - totalH / 2 + lineH / 2
+      : cy - (shapeH || totalH) / 2 + 12 + lineH / 2;
     allLines.forEach((line, i) => {
       ctx.fillText(line, cx, startY + i * lineH);
     });
@@ -1521,6 +1530,179 @@
     window.location.href = "slides.html";
   }
 
+  // ---------- Document Import ----------
+  const ACCEPTED_TYPES = {
+    "application/pdf": "pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "text/plain": "txt",
+    "text/markdown": "txt",
+    "text/csv": "txt",
+  };
+
+  const ACCEPTED_EXTENSIONS = { ".pdf": "pdf", ".docx": "docx", ".txt": "txt", ".md": "txt", ".csv": "txt", ".rtf": "txt" };
+
+  function detectFileType(file) {
+    const byMime = ACCEPTED_TYPES[file.type];
+    if (byMime) return byMime;
+    const ext = "." + file.name.split(".").pop().toLowerCase();
+    return ACCEPTED_EXTENSIONS[ext] || null;
+  }
+
+  function openFileImportPicker() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,.docx,.txt,.md,.csv,.rtf";
+    input.addEventListener("change", () => {
+      if (input.files[0]) importDocumentFile(input.files[0]);
+    });
+    input.click();
+  }
+
+  async function importDocumentFile(file, dropX, dropY) {
+    const type = detectFileType(file);
+    if (!type) {
+      alert("Unsupported file type. Please use PDF, Word (.docx), or text files.");
+      return;
+    }
+
+    let text = "";
+    try {
+      if (type === "txt") {
+        text = await file.text();
+      } else if (type === "pdf") {
+        text = await extractPdfText(file);
+      } else if (type === "docx") {
+        text = await extractDocxText(file);
+      }
+    } catch (err) {
+      alert("Could not read the file: " + (err.message || err));
+      return;
+    }
+
+    text = text.trim();
+    if (!text) {
+      alert("No text content found in the file.");
+      return;
+    }
+
+    const fileName = file.name.replace(/\.[^.]+$/, "");
+    createDocumentShape(text, fileName, dropX, dropY);
+  }
+
+  async function extractPdfText(file) {
+    if (typeof pdfjsLib === "undefined") {
+      throw new Error("PDF library is still loading. Please try again in a moment.");
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(" ");
+      if (pageText.trim()) pages.push(pageText.trim());
+    }
+    return pages.join("\n\n");
+  }
+
+  async function extractDocxText(file) {
+    if (typeof mammoth === "undefined") {
+      throw new Error("Word document library is still loading. Please try again in a moment.");
+    }
+    const arrayBuffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return result.value;
+  }
+
+  function createDocumentShape(text, title, dropX, dropY) {
+    const shapeW = 400;
+    const lineH = 14 * 1.3;
+    const charsPerLine = Math.floor((shapeW - 32) / 7);
+    const lines = text.split("\n").reduce((acc, line) => {
+      if (!line.trim()) { acc.push(""); return acc; }
+      for (let i = 0; i < line.length; i += charsPerLine) {
+        acc.push(line.slice(i, i + charsPerLine));
+      }
+      return acc;
+    }, []);
+    const shapeH = Math.max(60, Math.min(600, lines.length * lineH + 32));
+
+    let wx, wy;
+    if (dropX !== undefined && dropY !== undefined) {
+      const world = screenToWorld(dropX, dropY);
+      wx = world.x - shapeW / 2;
+      wy = world.y - 20;
+    } else {
+      const vp = document.getElementById("viewport");
+      const center = screenToWorld(vp.clientWidth / 2, vp.clientHeight / 2);
+      wx = center.x - shapeW / 2;
+      wy = center.y - shapeH / 2;
+    }
+
+    const label = title ? title + "\n\n" + text : text;
+
+    const shape = {
+      id: uid(),
+      type: "rect",
+      x: wx,
+      y: wy,
+      w: shapeW,
+      h: shapeH,
+      fill: "#111733",
+      stroke: state.strokeColor,
+      strokeWidth: 1,
+      label,
+      textColor: state.textColor,
+      textAlign: "left",
+      fontSize: 12,
+    };
+
+    state.shapes.push(shape);
+    state.selected = new Set([shape.id]);
+    save();
+    draw();
+  }
+
+  function setupDocumentDrop() {
+    const viewport = document.getElementById("viewport");
+    const overlay = document.getElementById("dropOverlay");
+    let dragCounter = 0;
+
+    viewport.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (dragCounter === 1) overlay.hidden = false;
+    });
+
+    viewport.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    });
+
+    viewport.addEventListener("dragleave", (e) => {
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        overlay.hidden = true;
+      }
+    });
+
+    viewport.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      overlay.hidden = true;
+
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+
+      const rect = viewport.getBoundingClientRect();
+      const dropX = e.clientX - rect.left;
+      const dropY = e.clientY - rect.top;
+      importDocumentFile(file, dropX, dropY);
+    });
+  }
+
   // ---------- Init ----------
   function init() {
     const yearEl = document.getElementById("year");
@@ -1671,6 +1853,10 @@
     document.getElementById("exportSelPngBtn").addEventListener("click", () => exportPng(false));
     document.getElementById("sendAllSlidesBtn").addEventListener("click", () => sendToSlides(true));
     document.getElementById("sendSelSlidesBtn").addEventListener("click", () => sendToSlides(false));
+
+    // Document import
+    document.getElementById("importDocBtn").addEventListener("click", openFileImportPicker);
+    setupDocumentDrop();
 
     // Canvas events
     canvas.addEventListener("mousedown", onMouseDown);
