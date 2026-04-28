@@ -60,6 +60,10 @@
       name: "Image + Caption",
       fields: { image: "", caption: "Add a caption here" },
     },
+    tasks: {
+      name: "Task Table",
+      fields: { title: "Tasks", _tasks: [], _taskColumns: [] },
+    },
   };
 
   function uid() {
@@ -148,9 +152,257 @@
           <div class="field-caption" ${ce} data-field="caption">${esc(content.caption)}</div>
         </div>`;
 
+      case "tasks":
+        return renderTaskSlideHTML(content, ce, esc);
+
       default:
         return "";
     }
+  }
+
+  function renderTaskSlideHTML(content, ce, esc) {
+    const tasks = content._tasks || [];
+    const cols = content._taskColumns || [];
+
+    let colHeaders = "";
+    cols.forEach(col => {
+      colHeaders += `<th class="stask-th">${esc(col.name)}</th>`;
+    });
+
+    let rows = "";
+    tasks.forEach((task, i) => {
+      let cells = "";
+      cols.forEach(col => {
+        const val = (task.colValues || {})[col.id] || "";
+        if (col.type === "tags" && val) {
+          const tags = val.split(",").filter(Boolean);
+          cells += `<td class="stask-td"><span class="stask-tags">${tags.map((t, ti) => `<span class="stask-tag" style="--tag-hue:${(ti * 47 + 200) % 360}">${esc(t)}</span>`).join("")}</span></td>`;
+        } else if (col.type === "dropdown" && val) {
+          cells += `<td class="stask-td"><span class="stask-dropdown-val">${esc(val)}</span></td>`;
+        } else {
+          cells += `<td class="stask-td">${esc(val || "—")}</td>`;
+        }
+      });
+      rows += `<tr class="stask-row" data-task-idx="${i}">
+        <td class="stask-td stask-text">${esc(task.text || "(empty)")}</td>
+        ${cells}
+      </tr>`;
+    });
+
+    if (!tasks.length) {
+      rows = `<tr><td class="stask-td stask-empty" colspan="${1 + cols.length}">Click "Edit Tasks" to add tasks</td></tr>`;
+    }
+
+    return `<div class="slide-content layout-tasks">
+      <div class="field-title" ${ce} data-field="title">${esc(content.title)}</div>
+      <table class="stask-table">
+        <thead><tr><th class="stask-th">Task</th>${colHeaders}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="stask-actions">
+        <button class="stask-edit-btn" data-action="edit-tasks">Edit Tasks</button>
+      </div>
+    </div>`;
+  }
+
+  function setupSlideTaskHandlers() {
+    const preview = document.getElementById("slidePreview");
+    preview.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action='edit-tasks']");
+      if (btn) {
+        e.preventDefault();
+        e.stopPropagation();
+        openSlideTaskEditor();
+      }
+    });
+  }
+
+  function openSlideTaskEditor() {
+    closeSlideTaskEditor();
+    const slide = currentSlide();
+    if (!slide || slide.template !== "tasks") return;
+    if (!slide.content._tasks) slide.content._tasks = [];
+    if (!slide.content._taskColumns) slide.content._taskColumns = [];
+
+    const overlay = document.createElement("div");
+    overlay.className = "slide-task-editor";
+    overlay.id = "slideTaskEditor";
+
+    const header = document.createElement("div");
+    header.className = "ste-header";
+    const title = document.createElement("span");
+    title.className = "ste-title";
+    title.textContent = "Edit Slide Tasks";
+    header.appendChild(title);
+
+    const addColBtn = document.createElement("button");
+    addColBtn.className = "ste-btn";
+    addColBtn.textContent = "+ Column";
+    addColBtn.addEventListener("click", () => {
+      const name = prompt("Column name:");
+      if (!name) return;
+      const type = prompt("Type (text, dropdown, tags):", "text") || "text";
+      let options = [];
+      if (type === "dropdown" || type === "tags") {
+        const raw = prompt("Options (comma-separated):");
+        if (raw) options = raw.split(",").map(s => s.trim()).filter(Boolean);
+      }
+      slide.content._taskColumns.push({ id: uid(), name, type, options });
+      saveState();
+      rebuildRows();
+      renderSlidePreview();
+    });
+    header.appendChild(addColBtn);
+
+    const addTaskBtn = document.createElement("button");
+    addTaskBtn.className = "ste-btn";
+    addTaskBtn.textContent = "+ Task";
+    addTaskBtn.addEventListener("click", () => {
+      slide.content._tasks.push({ id: uid(), text: "", colValues: {} });
+      saveState();
+      rebuildRows();
+      renderSlidePreview();
+      setTimeout(() => {
+        const inputs = overlay.querySelectorAll(".ste-task-text");
+        if (inputs.length) inputs[inputs.length - 1].focus();
+      }, 30);
+    });
+    header.appendChild(addTaskBtn);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "ste-close";
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", closeSlideTaskEditor);
+    header.appendChild(closeBtn);
+
+    overlay.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "ste-body";
+    overlay.appendChild(body);
+
+    function rebuildRows() {
+      body.innerHTML = "";
+      const cols = slide.content._taskColumns || [];
+
+      if (cols.length) {
+        const colHeader = document.createElement("div");
+        colHeader.className = "ste-col-header";
+        cols.forEach(col => {
+          const chip = document.createElement("span");
+          chip.className = "ste-col-chip";
+          chip.textContent = col.name;
+          const del = document.createElement("button");
+          del.className = "ste-col-del";
+          del.textContent = "×";
+          del.addEventListener("click", () => {
+            slide.content._taskColumns = slide.content._taskColumns.filter(c => c.id !== col.id);
+            (slide.content._tasks || []).forEach(t => { if (t.colValues) delete t.colValues[col.id]; });
+            saveState();
+            rebuildRows();
+            renderSlidePreview();
+          });
+          chip.appendChild(del);
+          colHeader.appendChild(chip);
+        });
+        body.appendChild(colHeader);
+      }
+
+      (slide.content._tasks || []).forEach(task => {
+        const row = document.createElement("div");
+        row.className = "ste-row";
+
+        const text = document.createElement("input");
+        text.type = "text";
+        text.className = "ste-task-text";
+        text.value = task.text || "";
+        text.placeholder = "Task…";
+        text.addEventListener("input", () => {
+          task.text = text.value;
+          saveState();
+          renderSlidePreview();
+        });
+        row.appendChild(text);
+
+        cols.forEach(col => {
+          if (col.type === "dropdown") {
+            const sel = document.createElement("select");
+            sel.className = "ste-col-input";
+            const empty = document.createElement("option");
+            empty.value = ""; empty.textContent = "—";
+            sel.appendChild(empty);
+            (col.options || []).forEach(opt => {
+              const o = document.createElement("option");
+              o.value = opt; o.textContent = opt;
+              if ((task.colValues || {})[col.id] === opt) o.selected = true;
+              sel.appendChild(o);
+            });
+            sel.addEventListener("change", () => {
+              if (!task.colValues) task.colValues = {};
+              task.colValues[col.id] = sel.value;
+              saveState();
+              renderSlidePreview();
+            });
+            row.appendChild(sel);
+          } else if (col.type === "tags") {
+            const wrap = document.createElement("div");
+            wrap.className = "ste-tags-wrap";
+            const selected = ((task.colValues || {})[col.id] || "").split(",").filter(Boolean);
+            (col.options || []).forEach((tag, ti) => {
+              const chip = document.createElement("button");
+              chip.className = "ste-tag-chip" + (selected.includes(tag) ? " active" : "");
+              chip.style.setProperty("--tag-hue", (ti * 47 + 200) % 360);
+              chip.textContent = tag;
+              chip.addEventListener("click", () => {
+                const idx = selected.indexOf(tag);
+                if (idx >= 0) { selected.splice(idx, 1); chip.classList.remove("active"); }
+                else { selected.push(tag); chip.classList.add("active"); }
+                if (!task.colValues) task.colValues = {};
+                task.colValues[col.id] = selected.join(",");
+                saveState();
+                renderSlidePreview();
+              });
+              wrap.appendChild(chip);
+            });
+            row.appendChild(wrap);
+          } else {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.className = "ste-col-input";
+            input.value = (task.colValues || {})[col.id] || "";
+            input.placeholder = "—";
+            input.addEventListener("input", () => {
+              if (!task.colValues) task.colValues = {};
+              task.colValues[col.id] = input.value;
+              saveState();
+              renderSlidePreview();
+            });
+            row.appendChild(input);
+          }
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "ste-row-del";
+        delBtn.textContent = "×";
+        delBtn.addEventListener("click", () => {
+          slide.content._tasks = slide.content._tasks.filter(t => t.id !== task.id);
+          saveState();
+          rebuildRows();
+          renderSlidePreview();
+        });
+        row.appendChild(delBtn);
+
+        body.appendChild(row);
+      });
+    }
+
+    rebuildRows();
+    document.body.appendChild(overlay);
+  }
+
+  function closeSlideTaskEditor() {
+    const el = document.getElementById("slideTaskEditor");
+    if (el) el.remove();
   }
 
   // ---------- Persistence ----------
@@ -634,6 +886,7 @@
   // ---------- Navigation ----------
   function goToSlide(index) {
     saveFieldsFromDOM();
+    closeSlideTaskEditor();
     state.currentSlide = Math.max(0, Math.min(index, currentSlides().length - 1));
     saveState();
     renderSlideList();
@@ -1453,6 +1706,7 @@ Guidelines:
 
     renderAll();
     setupContextMenu();
+    setupSlideTaskHandlers();
 
     // Project controls
     document.getElementById("projectSelect").addEventListener("change", (e) => switchProject(Number(e.target.value)));

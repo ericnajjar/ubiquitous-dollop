@@ -361,7 +361,7 @@
   }
 
   function shapeContains(s, wx, wy) {
-    if (s.type === "rect" || s.type === "text") {
+    if (s.type === "rect" || s.type === "text" || s.type === "taskblock") {
       return wx >= s.x && wx <= s.x + s.w && wy >= s.y && wy <= s.y + s.h;
     }
     if (s.type === "circle") {
@@ -583,6 +583,9 @@
         ctx.strokeRect(s.x, s.y, s.w, s.h);
         ctx.setLineDash([]);
       }
+    } else if (s.type === "taskblock") {
+      drawTaskBlock(s, selected);
+      return;
     }
 
     // Draw text
@@ -600,6 +603,120 @@
       wrapText(s.label, tx, s.y + s.h / 2, s.w - 16, s.fontSize || 14, s.h);
       ctx.restore();
     }
+  }
+
+  function drawTaskBlock(s, selected) {
+    const tasks = s.tasks || [];
+    const cols = s.taskColumns || [];
+    const rowH = 28;
+    const headerH = 32;
+    const pad = 10;
+    const taskColW = Math.max(120, s.w - pad * 2 - cols.length * 90);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(s.x, s.y, s.w, s.h);
+    ctx.clip();
+
+    roundRect(s.x, s.y, s.w, s.h, 6);
+    ctx.fillStyle = s.fill || "#111733";
+    ctx.fill();
+    ctx.strokeStyle = selected ? "#fbbf24" : (s.stroke || "#6ea8ff");
+    ctx.lineWidth = selected ? 2 : 1;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(110, 168, 255, 0.12)";
+    ctx.fillRect(s.x, s.y, s.w, headerH);
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y + headerH);
+    ctx.lineTo(s.x + s.w, s.y + headerH);
+    ctx.strokeStyle = "rgba(110, 168, 255, 0.25)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = "#e7ecff";
+    ctx.font = "bold 12px Inter, system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Task", s.x + pad, s.y + headerH / 2);
+
+    let colX = s.x + pad + taskColW;
+    cols.forEach(col => {
+      ctx.fillText(col.name, colX, s.y + headerH / 2);
+      colX += 90;
+    });
+
+    tasks.forEach((task, i) => {
+      const ry = s.y + headerH + i * rowH;
+
+      if (i > 0) {
+        ctx.beginPath();
+        ctx.moveTo(s.x + pad, ry);
+        ctx.lineTo(s.x + s.w - pad, ry);
+        ctx.strokeStyle = "rgba(255,255,255,0.06)";
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = "#c8d0e7";
+      ctx.font = "12px Inter, system-ui, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      const textW = taskColW - 8;
+      let label = task.text || "(empty)";
+      if (ctx.measureText(label).width > textW) {
+        while (label.length > 1 && ctx.measureText(label + "…").width > textW) label = label.slice(0, -1);
+        label += "…";
+      }
+      ctx.fillText(label, s.x + pad, ry + rowH / 2);
+
+      let cx = s.x + pad + taskColW;
+      cols.forEach(col => {
+        const val = (task.colValues || {})[col.id] || "";
+        if (col.type === "tags" && val) {
+          const tags = val.split(",").filter(Boolean);
+          let tx = cx;
+          tags.forEach((tag, ti) => {
+            const hue = (ti * 47 + 200) % 360;
+            ctx.fillStyle = `hsl(${hue}, 55%, 28%)`;
+            const tw = ctx.measureText(tag).width + 8;
+            roundRect(tx, ry + 6, tw, 16, 3);
+            ctx.fill();
+            ctx.fillStyle = `hsl(${hue}, 80%, 82%)`;
+            ctx.font = "10px Inter, system-ui, sans-serif";
+            ctx.textBaseline = "middle";
+            ctx.fillText(tag, tx + 4, ry + 14);
+            tx += tw + 3;
+            ctx.font = "12px Inter, system-ui, sans-serif";
+          });
+        } else if (col.type === "dropdown" && val) {
+          ctx.fillStyle = "rgba(110, 168, 255, 0.15)";
+          const tw = ctx.measureText(val).width + 10;
+          roundRect(cx, ry + 6, tw, 16, 3);
+          ctx.fill();
+          ctx.fillStyle = "#9bb8e8";
+          ctx.font = "11px Inter, system-ui, sans-serif";
+          ctx.textBaseline = "middle";
+          ctx.fillText(val, cx + 5, ry + 14);
+          ctx.font = "12px Inter, system-ui, sans-serif";
+        } else {
+          ctx.fillStyle = "#8893b0";
+          ctx.textBaseline = "middle";
+          ctx.fillText(val || "—", cx, ry + rowH / 2);
+        }
+        cx += 90;
+      });
+    });
+
+    if (!tasks.length) {
+      ctx.fillStyle = "#5a6480";
+      ctx.font = "italic 11px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Double-click to add tasks", s.x + s.w / 2, s.y + headerH + 20);
+    }
+
+    ctx.restore();
   }
 
   function drawShapePreview(p) {
@@ -814,6 +931,7 @@
   }
 
   function onMouseDown(e) {
+    closeTaskBlockEditor();
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
       panning = true;
       panLast = { x: e.clientX, y: e.clientY };
@@ -1249,6 +1367,7 @@
     if (hit) {
       state.selected = new Set([hit.id]);
       draw();
+      if (hit.type === "taskblock") { openTaskBlockEditor(hit); return; }
       openTextEditor(hit);
       return;
     }
@@ -1692,6 +1811,222 @@
     draw();
   }
 
+  function createTaskBlockShape() {
+    const vp = document.getElementById("viewport");
+    const center = screenToWorld(vp.clientWidth / 2, vp.clientHeight / 2);
+    const shapeW = 360;
+    const shapeH = 120;
+    const shape = {
+      id: uid(),
+      type: "taskblock",
+      x: center.x - shapeW / 2,
+      y: center.y - shapeH / 2,
+      w: shapeW,
+      h: shapeH,
+      fill: "#111733",
+      stroke: state.strokeColor,
+      strokeWidth: 1,
+      tasks: [{ id: uid(), text: "", colValues: {} }],
+      taskColumns: [],
+    };
+    state.shapes.push(shape);
+    state.selected = new Set([shape.id]);
+    save();
+    draw();
+    openTaskBlockEditor(shape);
+  }
+
+  function autoSizeTaskBlock(shape) {
+    const rowH = 28;
+    const headerH = 32;
+    const tasks = shape.tasks || [];
+    const cols = shape.taskColumns || [];
+    shape.h = Math.max(80, headerH + tasks.length * rowH + 12);
+    shape.w = Math.max(240, 150 + cols.length * 90);
+  }
+
+  function openTaskBlockEditor(shape) {
+    closeTaskBlockEditor();
+    const overlay = document.createElement("div");
+    overlay.className = "canvas-taskblock-editor";
+    overlay.id = "taskBlockEditor";
+
+    const header = document.createElement("div");
+    header.className = "tbe-header";
+
+    const title = document.createElement("span");
+    title.className = "tbe-title";
+    title.textContent = "Edit Task Block";
+    header.appendChild(title);
+
+    const addColBtn = document.createElement("button");
+    addColBtn.className = "tbe-btn";
+    addColBtn.textContent = "+ Column";
+    addColBtn.addEventListener("click", () => {
+      const name = prompt("Column name:");
+      if (!name) return;
+      const type = prompt("Type (text, dropdown, tags):", "text") || "text";
+      let options = [];
+      if (type === "dropdown" || type === "tags") {
+        const raw = prompt("Options (comma-separated):");
+        if (raw) options = raw.split(",").map(s => s.trim()).filter(Boolean);
+      }
+      if (!shape.taskColumns) shape.taskColumns = [];
+      shape.taskColumns.push({ id: uid(), name, type, options });
+      autoSizeTaskBlock(shape);
+      save(); draw();
+      rebuildRows();
+    });
+    header.appendChild(addColBtn);
+
+    const addTaskBtn = document.createElement("button");
+    addTaskBtn.className = "tbe-btn";
+    addTaskBtn.textContent = "+ Task";
+    addTaskBtn.addEventListener("click", () => {
+      if (!shape.tasks) shape.tasks = [];
+      shape.tasks.push({ id: uid(), text: "", colValues: {} });
+      autoSizeTaskBlock(shape);
+      save(); draw();
+      rebuildRows();
+      setTimeout(() => {
+        const inputs = overlay.querySelectorAll(".tbe-task-text");
+        if (inputs.length) inputs[inputs.length - 1].focus();
+      }, 30);
+    });
+    header.appendChild(addTaskBtn);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "tbe-close";
+    closeBtn.textContent = "×";
+    closeBtn.addEventListener("click", () => closeTaskBlockEditor());
+    header.appendChild(closeBtn);
+
+    overlay.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "tbe-body";
+    overlay.appendChild(body);
+
+    function rebuildRows() {
+      body.innerHTML = "";
+      const cols = shape.taskColumns || [];
+
+      if (cols.length) {
+        const colHeader = document.createElement("div");
+        colHeader.className = "tbe-col-header";
+        cols.forEach(col => {
+          const chip = document.createElement("span");
+          chip.className = "tbe-col-chip";
+          chip.textContent = col.name;
+          const del = document.createElement("button");
+          del.className = "tbe-col-del";
+          del.textContent = "×";
+          del.addEventListener("click", () => {
+            shape.taskColumns = shape.taskColumns.filter(c => c.id !== col.id);
+            (shape.tasks || []).forEach(t => { if (t.colValues) delete t.colValues[col.id]; });
+            autoSizeTaskBlock(shape);
+            save(); draw();
+            rebuildRows();
+          });
+          chip.appendChild(del);
+          colHeader.appendChild(chip);
+        });
+        body.appendChild(colHeader);
+      }
+
+      (shape.tasks || []).forEach(task => {
+        const row = document.createElement("div");
+        row.className = "tbe-row";
+
+        const text = document.createElement("input");
+        text.type = "text";
+        text.className = "tbe-task-text";
+        text.value = task.text || "";
+        text.placeholder = "Task…";
+        text.addEventListener("input", () => {
+          task.text = text.value;
+          save(); draw();
+        });
+        row.appendChild(text);
+
+        cols.forEach(col => {
+          if (col.type === "dropdown") {
+            const sel = document.createElement("select");
+            sel.className = "tbe-col-input";
+            const empty = document.createElement("option");
+            empty.value = ""; empty.textContent = "—";
+            sel.appendChild(empty);
+            (col.options || []).forEach(opt => {
+              const o = document.createElement("option");
+              o.value = opt; o.textContent = opt;
+              if ((task.colValues || {})[col.id] === opt) o.selected = true;
+              sel.appendChild(o);
+            });
+            sel.addEventListener("change", () => {
+              if (!task.colValues) task.colValues = {};
+              task.colValues[col.id] = sel.value;
+              save(); draw();
+            });
+            row.appendChild(sel);
+          } else if (col.type === "tags") {
+            const wrap = document.createElement("div");
+            wrap.className = "tbe-tags-wrap";
+            const selected = ((task.colValues || {})[col.id] || "").split(",").filter(Boolean);
+            (col.options || []).forEach((tag, ti) => {
+              const chip = document.createElement("button");
+              chip.className = "tbe-tag-chip" + (selected.includes(tag) ? " active" : "");
+              chip.style.setProperty("--tag-hue", (ti * 47 + 200) % 360);
+              chip.textContent = tag;
+              chip.addEventListener("click", () => {
+                const idx = selected.indexOf(tag);
+                if (idx >= 0) { selected.splice(idx, 1); chip.classList.remove("active"); }
+                else { selected.push(tag); chip.classList.add("active"); }
+                if (!task.colValues) task.colValues = {};
+                task.colValues[col.id] = selected.join(",");
+                save(); draw();
+              });
+              wrap.appendChild(chip);
+            });
+            row.appendChild(wrap);
+          } else {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.className = "tbe-col-input";
+            input.value = (task.colValues || {})[col.id] || "";
+            input.placeholder = "—";
+            input.addEventListener("input", () => {
+              if (!task.colValues) task.colValues = {};
+              task.colValues[col.id] = input.value;
+              save(); draw();
+            });
+            row.appendChild(input);
+          }
+        });
+
+        const delBtn = document.createElement("button");
+        delBtn.className = "tbe-row-del";
+        delBtn.textContent = "×";
+        delBtn.addEventListener("click", () => {
+          shape.tasks = shape.tasks.filter(t => t.id !== task.id);
+          autoSizeTaskBlock(shape);
+          save(); draw();
+          rebuildRows();
+        });
+        row.appendChild(delBtn);
+
+        body.appendChild(row);
+      });
+    }
+
+    rebuildRows();
+    document.body.appendChild(overlay);
+  }
+
+  function closeTaskBlockEditor() {
+    const el = document.getElementById("taskBlockEditor");
+    if (el) el.remove();
+  }
+
   function setupDocumentDrop() {
     const viewport = document.getElementById("viewport");
     const overlay = document.getElementById("dropOverlay");
@@ -1881,6 +2216,9 @@
     document.getElementById("exportSelPngBtn").addEventListener("click", () => exportPng(false));
     document.getElementById("sendAllSlidesBtn").addEventListener("click", () => sendToSlides(true));
     document.getElementById("sendSelSlidesBtn").addEventListener("click", () => sendToSlides(false));
+
+    // Task block
+    document.getElementById("addTaskBlockBtn").addEventListener("click", createTaskBlockShape);
 
     // Document import
     document.getElementById("importDocBtn").addEventListener("click", openFileImportPicker);
