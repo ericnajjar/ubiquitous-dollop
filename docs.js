@@ -19,6 +19,48 @@
 
   function saveDocs() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state.docs)); } catch (_) {}
+    const doc = currentDoc();
+    if (doc && window.datascope?.versions) {
+      window.datascope.versions.saveSnapshot(STORE_KEY, doc.id, {
+        title: doc.title,
+        body: doc.body,
+        tasks: doc.tasks,
+        taskColumns: doc.taskColumns,
+        stories: doc.stories,
+        comments: doc.comments,
+      });
+    }
+  }
+
+  function openVersionHistory() {
+    const doc = currentDoc();
+    if (!doc || !window.datascope?.versions) return;
+    window.datascope.versions.openPanel(STORE_KEY, doc.id, {
+      formatLabel(snap) {
+        const title = snap.title || "Untitled";
+        const tasks = (snap.tasks || []).length;
+        let desc = title;
+        if (tasks) desc += " — " + tasks + " task" + (tasks !== 1 ? "s" : "");
+        return desc;
+      },
+      getCurrentData() {
+        return {
+          title: doc.title, body: doc.body, tasks: doc.tasks,
+          taskColumns: doc.taskColumns, stories: doc.stories, comments: doc.comments,
+        };
+      },
+      onRestore(snap) {
+        doc.title = snap.title || doc.title;
+        doc.body = snap.body || "";
+        doc.tasks = snap.tasks || [];
+        doc.taskColumns = snap.taskColumns || [];
+        doc.stories = snap.stories || [];
+        doc.comments = snap.comments || [];
+        saveDocs();
+        renderEditor();
+        renderSidebar();
+      },
+    });
   }
 
   function loadFolders() {
@@ -1604,6 +1646,7 @@
     document.getElementById("addTaskBtn").addEventListener("click", addTask);
     document.getElementById("addTaskBtn2").addEventListener("click", addTask);
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
+    document.getElementById("historyBtn").addEventListener("click", openVersionHistory);
     document.getElementById("addColBtn").addEventListener("click", (e) => {
       e.stopPropagation();
       showAddColumnPopup(document.getElementById("addColBtn"), "global", null);

@@ -194,6 +194,36 @@
         })
       );
     } catch (_) {}
+    const proj = currentProject();
+    if (proj && proj.id && window.datascope?.versions) {
+      window.datascope.versions.saveSnapshot(STORE_KEY, proj.id, {
+        name: proj.name,
+        slides: proj.slides,
+      });
+    }
+  }
+
+  function openVersionHistory() {
+    const proj = currentProject();
+    if (!proj || !window.datascope?.versions) return;
+    window.datascope.versions.openPanel(STORE_KEY, proj.id, {
+      formatLabel(snap) {
+        const n = (snap.slides || []).length;
+        const name = snap.name || "Untitled";
+        return name + " — " + n + " slide" + (n !== 1 ? "s" : "");
+      },
+      getCurrentData() {
+        saveFieldsFromDOM();
+        return { name: proj.name, slides: proj.slides };
+      },
+      onRestore(snap) {
+        proj.name = snap.name || proj.name;
+        proj.slides = snap.slides || [];
+        state.currentSlide = 0;
+        saveState();
+        renderAll();
+      },
+    });
   }
 
   // ---------- State ----------
@@ -1481,6 +1511,7 @@ Guidelines:
     document.getElementById("exportAllPngBtn").addEventListener("click", exportAllPng);
     document.getElementById("exportHtmlBtn").addEventListener("click", exportHtml);
     document.getElementById("printBtn").addEventListener("click", handlePrint);
+    document.getElementById("historyBtn").addEventListener("click", openVersionHistory);
 
     document.addEventListener("datascope:teamchange", () => {
       const indices = teamFilteredProjectIndices();

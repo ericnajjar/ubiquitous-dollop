@@ -72,6 +72,34 @@
   function save() {
     syncFromState();
     try { localStorage.setItem(STORE_KEY, JSON.stringify(canvases)); } catch (_) {}
+    if (currentId && window.datascope?.versions) {
+      window.datascope.versions.saveSnapshot(STORE_KEY, currentId, {
+        shapes: state.shapes,
+        arrows: state.arrows,
+      });
+    }
+  }
+
+  function openVersionHistory() {
+    if (!currentId || !window.datascope?.versions) return;
+    window.datascope.versions.openPanel(STORE_KEY, currentId, {
+      formatLabel(snap) {
+        const s = (snap.shapes || []).length;
+        const a = (snap.arrows || []).length;
+        return s + " shape" + (s !== 1 ? "s" : "") + ", " + a + " arrow" + (a !== 1 ? "s" : "");
+      },
+      getCurrentData() {
+        return { shapes: state.shapes, arrows: state.arrows };
+      },
+      onRestore(snap) {
+        state.shapes = snap.shapes || [];
+        state.arrows = snap.arrows || [];
+        state.selected = new Set();
+        state.selectedArrows = new Set();
+        save();
+        draw();
+      },
+    });
   }
 
   function ensureCanvasForContext() {
@@ -1857,6 +1885,9 @@
     // Document import
     document.getElementById("importDocBtn").addEventListener("click", openFileImportPicker);
     setupDocumentDrop();
+
+    // Version history
+    document.getElementById("historyBtn").addEventListener("click", openVersionHistory);
 
     // Canvas events
     canvas.addEventListener("mousedown", onMouseDown);
