@@ -24,6 +24,7 @@
       window.datascope.versions.saveSnapshot(STORE_KEY, doc.id, {
         title: doc.title,
         body: doc.body,
+        blocks: doc.blocks,
         tasks: doc.tasks,
         taskColumns: doc.taskColumns,
         stories: doc.stories,
@@ -44,14 +45,17 @@
         return desc;
       },
       getCurrentData() {
+        saveAllProse();
         return {
-          title: doc.title, body: doc.body, tasks: doc.tasks,
-          taskColumns: doc.taskColumns, stories: doc.stories, comments: doc.comments,
+          title: doc.title, body: doc.body, blocks: doc.blocks,
+          tasks: doc.tasks, taskColumns: doc.taskColumns,
+          stories: doc.stories, comments: doc.comments,
         };
       },
       onRestore(snap) {
         doc.title = snap.title || doc.title;
         doc.body = snap.body || "";
+        doc.blocks = snap.blocks || null;
         doc.tasks = snap.tasks || [];
         doc.taskColumns = snap.taskColumns || [];
         doc.stories = snap.stories || [];
@@ -256,27 +260,286 @@
     return body.split(/\n\n+/).map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`).join("") || "";
   }
 
+  // ---------- Document Blocks ----------
+  let activeProse = null;
+
+  function ensureBlocks(doc) {
+    if (Array.isArray(doc.blocks)) return;
+    doc.blocks = [];
+    if (doc.body) doc.blocks.push({ id: uid(), type: "prose", content: doc.body });
+    if (doc.tasks && doc.tasks.length) {
+      doc.blocks.push({ id: uid(), type: "tasks", taskIds: doc.tasks.map(t => t.id) });
+    }
+    if (!doc.blocks.length) doc.blocks.push({ id: uid(), type: "prose", content: "" });
+  }
+
+  function saveAllProse() {
+    const doc = currentDoc();
+    if (!doc || !doc.blocks) return;
+    document.querySelectorAll(".doc-prose[data-block-id]").forEach(el => {
+      const block = doc.blocks.find(b => b.id === el.dataset.blockId);
+      if (block && block.type === "prose") block.content = el.innerHTML;
+    });
+    doc.body = doc.blocks.filter(b => b.type === "prose").map(b => b.content || "").join("\n");
+  }
+
+  function renderBlocks(tasksOnly) {
+    const doc = currentDoc();
+    const container = document.getElementById("docBlocks");
+    if (!doc) { container.innerHTML = ""; return; }
+    ensureBlocks(doc);
+
+    if (tasksOnly) {
+      container.querySelectorAll(".doc-task-block").forEach(el => {
+        const block = doc.blocks.find(b => b.id === el.dataset.blockId);
+        if (block) el.replaceWith(buildTaskBlock(block, doc));
+      });
+      return;
+    }
+
+    saveAllProse();
+    container.innerHTML = "";
+    container.appendChild(buildBlockInsert(0));
+    doc.blocks.forEach((block, i) => {
+      if (block.type === "prose") container.appendChild(buildProseBlock(block));
+      else if (block.type === "tasks") container.appendChild(buildTaskBlock(block, doc));
+      container.appendChild(buildBlockInsert(i + 1));
+    });
+  }
+
+  function buildProseBlock(block) {
+    const wrap = document.createElement("div");
+    wrap.className = "doc-block doc-prose-block";
+    wrap.dataset.blockId = block.id;
+
+    const prose = document.createElement("div");
+    prose.className = "doc-prose";
+    prose.contentEditable = "true";
+    prose.dataset.blockId = block.id;
+    prose.dataset.placeholder = "Start writing…";
+    prose.innerHTML = bodyToHtml(block.content || "");
+
+    prose.addEventListener("focus", () => {
+      activeProse = prose;
+      document.getElementById("proseToolbar").hidden = false;
+    });
+
+    prose.addEventListener("input", () => {
+      block.content = prose.innerHTML;
+      const doc = currentDoc();
+      if (doc) {
+        doc.body = doc.blocks.filter(b => b.type === "prose").map(b => b.content || "").join("\n");
+        doc.updatedAt = new Date().toISOString();
+        saveDocs();
+      }
+    });
+
+    prose.addEventListener("click", (e) => {
+      const mark = e.target.closest("mark[data-comment-id]");
+      if (mark) highlightCommentInProse(mark.dataset.commentId);
+    });
+
+    wrap.appendChild(prose);
+    return wrap;
+  }
+
+  function buildTaskBlock(block, doc) {
+    const wrap = document.createElement("div");
+    wrap.className = "doc-block doc-task-block";
+    wrap.dataset.blockId = block.id;
+
+    if (!doc.taskColumns) doc.taskColumns = [];
+    const tasks = (block.taskIds || []).map(id => (doc.tasks || []).find(t => t.id === id)).filter(Boolean);
+
+    const header = document.createElement("div");
+    header.className = "tasks-header";
+
+    const label = document.createElement("span");
+    label.className = "tasks-label";
+    label.textContent = "Tasks";
+    header.appendChild(label);
+
+    const colChips = document.createElement("div");
+    colChips.className = "tasks-col-chips";
+    doc.taskColumns.forEach(col => {
+      const chip = document.createElement("span");
+      chip.className = "tasks-col-chip";
+      const name = document.createElement("span");
+      name.textContent = col.name;
+      const del = document.createElement("button");
+      del.className = "tasks-col-chip-del";
+      del.textContent = "x";
+      del.title = "Remove global column";
+      del.addEventListener("click", (e) => { e.stopPropagation(); deleteGlobalColumn(col.id); });
+      chip.appendChild(name);
+      chip.appendChild(del);
+      colChips.appendChild(chip);
+    });
+    header.appendChild(colChips);
+
+    const addColBtn = document.createElement("button");
+    addColBtn.className = "btn btn-ghost btn-sm";
+    addColBtn.textContent = "+ Column";
+    addColBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showAddColumnPopup(addColBtn, "global", null);
+    });
+    header.appendChild(addColBtn);
+
+    const addTaskBtn = document.createElement("button");
+    addTaskBtn.className = "btn btn-ghost btn-sm";
+    addTaskBtn.textContent = "+ Task";
+    addTaskBtn.addEventListener("click", () => addTaskToBlock(block.id));
+    header.appendChild(addTaskBtn);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.className = "btn btn-ghost btn-sm danger";
+    removeBtn.textContent = "×";
+    removeBtn.title = "Remove task block";
+    removeBtn.addEventListener("click", () => removeBlock(block.id));
+    header.appendChild(removeBtn);
+
+    wrap.appendChild(header);
+
+    const list = document.createElement("div");
+    list.className = "tasks-list";
+    tasks.forEach(task => list.appendChild(buildTaskRow(task, block)));
+    wrap.appendChild(list);
+
+    return wrap;
+  }
+
+  function buildBlockInsert(position) {
+    const row = document.createElement("div");
+    row.className = "block-insert-row";
+    const btn = document.createElement("button");
+    btn.className = "block-insert-btn";
+    btn.textContent = "+";
+    btn.title = "Insert block";
+    btn.addEventListener("click", () => showBlockMenu(btn, position));
+    row.appendChild(btn);
+    return row;
+  }
+
+  function showBlockMenu(anchor, position) {
+    document.querySelector(".block-menu")?.remove();
+    const menu = document.createElement("div");
+    menu.className = "block-menu";
+
+    [["prose", "Text"], ["tasks", "Task Table"]].forEach(([type, label]) => {
+      const btn = document.createElement("button");
+      btn.className = "block-menu-item";
+      btn.textContent = label;
+      btn.addEventListener("click", () => {
+        insertBlock(position, type);
+        menu.remove();
+      });
+      menu.appendChild(btn);
+    });
+
+    const rect = anchor.getBoundingClientRect();
+    menu.style.position = "fixed";
+    menu.style.top = (rect.bottom + 4) + "px";
+    menu.style.left = Math.max(10, rect.left - 30) + "px";
+    menu.style.zIndex = "200";
+    document.body.appendChild(menu);
+
+    setTimeout(() => {
+      const dismiss = (e) => {
+        if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("click", dismiss, true); }
+      };
+      document.addEventListener("click", dismiss, true);
+    }, 0);
+  }
+
+  function insertBlock(position, type) {
+    const doc = currentDoc();
+    if (!doc) return;
+    ensureBlocks(doc);
+    saveAllProse();
+
+    const block = { id: uid(), type };
+    if (type === "prose") {
+      block.content = "";
+    } else if (type === "tasks") {
+      const task = { id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} };
+      if (!doc.tasks) doc.tasks = [];
+      doc.tasks.push(task);
+      block.taskIds = [task.id];
+    }
+
+    doc.blocks.splice(position, 0, block);
+    saveDocs();
+    renderBlocks(false);
+
+    if (type === "prose") {
+      setTimeout(() => {
+        const el = document.querySelector(`.doc-prose[data-block-id="${block.id}"]`);
+        if (el) el.focus();
+      }, 50);
+    } else if (type === "tasks") {
+      setTimeout(() => {
+        const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .task-text`);
+        if (rows.length) rows[rows.length - 1].focus();
+      }, 50);
+    }
+  }
+
+  function removeBlock(blockId) {
+    const doc = currentDoc();
+    if (!doc) return;
+    const block = doc.blocks.find(b => b.id === blockId);
+    if (!block) return;
+
+    if (block.type === "tasks") {
+      const taskIds = new Set(block.taskIds || []);
+      doc.tasks = (doc.tasks || []).filter(t => !taskIds.has(t.id));
+    }
+
+    doc.blocks = doc.blocks.filter(b => b.id !== blockId);
+    if (!doc.blocks.length) doc.blocks.push({ id: uid(), type: "prose", content: "" });
+    saveDocs();
+    renderBlocks(false);
+  }
+
+  function addTaskToBlock(blockId) {
+    const doc = currentDoc();
+    if (!doc) return;
+    const block = doc.blocks.find(b => b.id === blockId);
+    if (!block || block.type !== "tasks") return;
+    if (!doc.tasks) doc.tasks = [];
+    const task = { id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} };
+    doc.tasks.push(task);
+    if (!block.taskIds) block.taskIds = [];
+    block.taskIds.push(task.id);
+    saveDocs();
+    renderBlocks(true);
+    setTimeout(() => {
+      const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${blockId}"] .task-text`);
+      if (rows.length) rows[rows.length - 1].focus();
+    }, 50);
+  }
+
   function renderEditor() {
     const doc = currentDoc();
-    const container = document.getElementById("storiesContainer");
+    const storiesContainer = document.getElementById("storiesContainer");
     const emptyMsg = document.getElementById("editorEmpty");
-    const prose = document.getElementById("docProse");
-    const proseArea = document.getElementById("proseArea");
     const divider = document.getElementById("storiesDivider");
     const titleInput = document.getElementById("docTitle");
     const deleteBtn = document.getElementById("deleteDocBtn");
     const addStoryBtn = document.getElementById("addStoryBtn");
     const addTaskBtn2 = document.getElementById("addTaskBtn2");
-
+    const toolbar = document.getElementById("proseToolbar");
+    const blocksContainer = document.getElementById("docBlocks");
     const editorHeader = document.getElementById("editorHeader");
 
     if (!doc) {
       emptyMsg.hidden = false;
       editorHeader.hidden = true;
-      proseArea.hidden = true;
-      document.getElementById("tasksArea").hidden = true;
+      toolbar.hidden = true;
+      blocksContainer.innerHTML = "";
       divider.hidden = true;
-      container.innerHTML = "";
+      storiesContainer.innerHTML = "";
       titleInput.value = "";
       titleInput.disabled = true;
       deleteBtn.hidden = true;
@@ -290,7 +553,7 @@
 
     emptyMsg.hidden = true;
     editorHeader.hidden = false;
-    proseArea.hidden = false;
+    toolbar.hidden = false;
     titleInput.disabled = false;
     titleInput.value = doc.title;
     deleteBtn.hidden = false;
@@ -317,18 +580,12 @@
       moveWrap.appendChild(sel);
     }
 
-    // Only update prose content on doc switch (avoid resetting cursor mid-type)
-    if (prose.dataset.docId !== doc.id) {
-      prose.innerHTML = bodyToHtml(doc.body);
-      prose.dataset.docId = doc.id;
-    }
-
-    renderTasks();
+    renderBlocks(false);
 
     divider.hidden = doc.stories.length === 0;
-    container.innerHTML = "";
+    storiesContainer.innerHTML = "";
     doc.stories.forEach((story, idx) => {
-      container.appendChild(buildStoryBlock(story, idx));
+      storiesContainer.appendChild(buildStoryBlock(story, idx));
     });
 
     renderComments();
@@ -365,18 +622,67 @@
       del.addEventListener("click", (e) => { e.stopPropagation(); onDelete(); });
       labelRow.appendChild(del);
     }
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "task-col-input";
-    input.value = (item.colValues || {})[col.id] || "";
-    input.placeholder = "—";
-    input.addEventListener("input", () => {
-      if (!item.colValues) item.colValues = {};
-      item.colValues[col.id] = input.value;
-      saveDocs();
-    });
     field.appendChild(labelRow);
-    field.appendChild(input);
+
+    const colType = col.type || "text";
+    const currentVal = (item.colValues || {})[col.id] || "";
+
+    if (colType === "dropdown") {
+      const sel = document.createElement("select");
+      sel.className = "task-col-select";
+      const emptyOpt = document.createElement("option");
+      emptyOpt.value = "";
+      emptyOpt.textContent = "—";
+      sel.appendChild(emptyOpt);
+      (col.options || []).forEach(opt => {
+        const o = document.createElement("option");
+        o.value = opt;
+        o.textContent = opt;
+        if (opt === currentVal) o.selected = true;
+        sel.appendChild(o);
+      });
+      sel.addEventListener("change", () => {
+        if (!item.colValues) item.colValues = {};
+        item.colValues[col.id] = sel.value;
+        saveDocs();
+      });
+      field.appendChild(sel);
+    } else if (colType === "tags") {
+      const tagsWrap = document.createElement("div");
+      tagsWrap.className = "task-col-tags";
+      const selected = currentVal ? currentVal.split(",").filter(Boolean) : [];
+      (col.options || []).forEach((tag, ti) => {
+        const chip = document.createElement("button");
+        chip.className = "task-tag-chip";
+        if (selected.includes(tag)) chip.classList.add("active");
+        chip.style.setProperty("--tag-hue", (ti * 47 + 200) % 360);
+        chip.textContent = tag;
+        chip.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const idx = selected.indexOf(tag);
+          if (idx >= 0) { selected.splice(idx, 1); chip.classList.remove("active"); }
+          else { selected.push(tag); chip.classList.add("active"); }
+          if (!item.colValues) item.colValues = {};
+          item.colValues[col.id] = selected.join(",");
+          saveDocs();
+        });
+        tagsWrap.appendChild(chip);
+      });
+      field.appendChild(tagsWrap);
+    } else {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "task-col-input";
+      input.value = currentVal;
+      input.placeholder = "—";
+      input.addEventListener("input", () => {
+        if (!item.colValues) item.colValues = {};
+        item.colValues[col.id] = input.value;
+        saveDocs();
+      });
+      field.appendChild(input);
+    }
+
     return field;
   }
 
@@ -491,23 +797,66 @@
       });
     }
 
+    const typeWrap = document.createElement("div");
+    typeWrap.className = "acp-field";
+    const typeLbl = document.createElement("label");
+    typeLbl.className = "acp-label";
+    typeLbl.textContent = "Type";
+    const typeSel = document.createElement("select");
+    typeSel.className = "acp-select";
+    [["text", "Text"], ["dropdown", "Dropdown"], ["tags", "Tags"]].forEach(([val, txt]) => {
+      const o = document.createElement("option");
+      o.value = val;
+      o.textContent = txt;
+      typeSel.appendChild(o);
+    });
+    typeWrap.appendChild(typeLbl);
+    typeWrap.appendChild(typeSel);
+    popup.appendChild(typeWrap);
+
+    const optionsWrap = document.createElement("div");
+    optionsWrap.className = "acp-field";
+    optionsWrap.hidden = true;
+    const optionsLbl = document.createElement("label");
+    optionsLbl.className = "acp-label";
+    optionsLbl.textContent = "Options (one per line)";
+    const optionsInput = document.createElement("textarea");
+    optionsInput.className = "acp-textarea";
+    optionsInput.rows = 3;
+    optionsInput.placeholder = "e.g.\nTo Do\nIn Progress\nDone";
+    optionsWrap.appendChild(optionsLbl);
+    optionsWrap.appendChild(optionsInput);
+    popup.appendChild(optionsWrap);
+
+    typeSel.addEventListener("change", () => {
+      optionsWrap.hidden = typeSel.value === "text";
+      optionsLbl.textContent = typeSel.value === "tags" ? "Tags (one per line)" : "Options (one per line)";
+    });
+
     const addBtn = document.createElement("button");
     addBtn.className = "btn btn-primary btn-sm acp-add-btn";
     addBtn.textContent = "Add Column";
     addBtn.addEventListener("click", () => {
       const name = nameInput.value.trim();
       if (!name) { nameInput.focus(); return; }
+      const colType = typeSel.value;
+      const options = colType !== "text"
+        ? optionsInput.value.split("\n").map(s => s.trim()).filter(Boolean)
+        : [];
+      if (colType !== "text" && !options.length) { optionsInput.focus(); return; }
+      const colDef = { id: uid(), name, type: colType };
+      if (options.length) colDef.options = options;
       const scope = popup.querySelector("input[name='acp-scope-radio']:checked")?.value || "global";
       if (scope === "global") {
         if (!doc.taskColumns) doc.taskColumns = [];
-        doc.taskColumns.push({ id: uid(), name });
+        doc.taskColumns.push(colDef);
       } else {
         const taskId = relatedTaskId !== null ? relatedTaskId : (popup.querySelector("#acp-task-sel")?.value || null);
         if (!taskId) return;
         const task = (doc.tasks || []).find((t) => t.id === taskId);
         if (!task) return;
         if (!task.localColumns) task.localColumns = [];
-        task.localColumns.push({ id: uid(), name });
+        task.localColumns.push(colDef);
       }
       saveDocs();
       renderTasks();
@@ -531,41 +880,10 @@
   }
 
   function renderTasks() {
-    const doc = currentDoc();
-    const area = document.getElementById("tasksArea");
-    const list = document.getElementById("tasksList");
-    const colChips = document.getElementById("tasksColChips");
-    if (!doc) { area.hidden = true; return; }
-
-    if (!doc.tasks) doc.tasks = [];
-    if (!doc.taskColumns) doc.taskColumns = [];
-    area.hidden = !doc.tasks.length && !doc.taskColumns.length;
-    list.innerHTML = "";
-
-    if (colChips) {
-      colChips.innerHTML = "";
-      doc.taskColumns.forEach((col) => {
-        const chip = document.createElement("span");
-        chip.className = "tasks-col-chip";
-        const name = document.createElement("span");
-        name.textContent = col.name;
-        const del = document.createElement("button");
-        del.className = "tasks-col-chip-del";
-        del.textContent = "×";
-        del.title = "Remove global column";
-        del.addEventListener("click", (e) => { e.stopPropagation(); deleteGlobalColumn(col.id); });
-        chip.appendChild(name);
-        chip.appendChild(del);
-        colChips.appendChild(chip);
-      });
-    }
-
-    doc.tasks.forEach((task) => {
-      list.appendChild(buildTaskRow(task));
-    });
+    renderBlocks(true);
   }
 
-  function buildTaskRow(task) {
+  function buildTaskRow(task, block) {
     const row = document.createElement("div");
     row.className = "task-row";
     row.draggable = true;
@@ -683,6 +1001,11 @@
       const [moved] = doc.tasks.splice(srcIdx, 1);
       const dstIdx = doc.tasks.findIndex((t) => t.id === task.id);
       doc.tasks.splice(insertAfter ? dstIdx + 1 : dstIdx, 0, moved);
+      if (block && block.taskIds) {
+        block.taskIds = block.taskIds.filter(id => id !== dragSrcTaskId);
+        const dstBlockIdx = block.taskIds.indexOf(task.id);
+        block.taskIds.splice(insertAfter ? dstBlockIdx + 1 : dstBlockIdx, 0, dragSrcTaskId);
+      }
       clearDropIndicators();
       saveDocs();
       renderTasks();
@@ -705,10 +1028,17 @@
       const newTask = { id: uid(), text: "", expanded: false, children: [], linkedCard: null, localColumns: [], colValues: {} };
       const idx = doc.tasks.findIndex((t) => t.id === task.id);
       doc.tasks.splice(idx + 1, 0, newTask);
+      if (block && block.taskIds) {
+        const blockIdx = block.taskIds.indexOf(task.id);
+        block.taskIds.splice(blockIdx + 1, 0, newTask.id);
+      }
       saveDocs();
       renderTasks();
-      const inputs = document.querySelectorAll("#tasksList .task-row-header .task-text");
-      if (inputs[idx + 1]) inputs[idx + 1].focus();
+      if (block) {
+        const inputs = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .task-text`);
+        const localIdx = block.taskIds ? block.taskIds.indexOf(newTask.id) : -1;
+        if (localIdx >= 0 && inputs[localIdx]) inputs[localIdx].focus();
+      }
     });
 
     linkBtn.addEventListener("click", (e) => {
@@ -727,7 +1057,8 @@
       task.expanded = true;
       saveDocs();
       renderTasks();
-      const allRows = document.querySelectorAll("#tasksList .task-child-text");
+      const scope = block ? `.doc-task-block[data-block-id="${block.id}"]` : ".doc-task-block";
+      const allRows = document.querySelectorAll(`${scope} .task-child-text`);
       if (allRows.length) allRows[allRows.length - 1].focus();
     });
 
@@ -735,6 +1066,9 @@
       const doc = currentDoc();
       if (!doc) return;
       doc.tasks = doc.tasks.filter((t) => t.id !== task.id);
+      if (block && block.taskIds) {
+        block.taskIds = block.taskIds.filter(id => id !== task.id);
+      }
       saveDocs();
       renderTasks();
     });
@@ -833,7 +1167,8 @@
       parent.children.splice(idx + 1, 0, newChild);
       saveDocs();
       renderTasks();
-      const inputs = document.querySelectorAll("#tasksList .task-child-text");
+      const taskRow = wrap.closest(".task-row");
+      const inputs = taskRow ? taskRow.querySelectorAll(".task-child-text") : document.querySelectorAll(".task-child-text");
       if (inputs[idx + 1]) inputs[idx + 1].focus();
     });
 
@@ -1006,12 +1341,24 @@
   function addTask() {
     const doc = currentDoc();
     if (!doc) return;
+    ensureBlocks(doc);
     if (!doc.tasks) doc.tasks = [];
-    doc.tasks.push({ id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} });
-    saveDocs();
-    renderTasks();
-    const rows = document.querySelectorAll(".task-row-header .task-text");
-    if (rows.length) rows[rows.length - 1].focus();
+
+    const taskBlock = doc.blocks.find(b => b.type === "tasks");
+    if (taskBlock) {
+      addTaskToBlock(taskBlock.id);
+    } else {
+      const task = { id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} };
+      doc.tasks.push(task);
+      const block = { id: uid(), type: "tasks", taskIds: [task.id] };
+      doc.blocks.push(block);
+      saveDocs();
+      renderBlocks(false);
+      setTimeout(() => {
+        const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .task-text`);
+        if (rows.length) rows[rows.length - 1].focus();
+      }, 50);
+    }
   }
 
   function autoGrow(el) {
@@ -1525,7 +1872,7 @@
 
     wrapRangeWithMark(range, commentId);
 
-    doc.body = document.getElementById("docProse").innerHTML;
+    saveAllProse();
     saveDocs();
     renderComments();
 
@@ -1549,25 +1896,22 @@
     if (!doc) return;
     doc.comments = (doc.comments || []).filter(c => c.id !== commentId);
 
-    const prose = document.getElementById("docProse");
-    const marks = prose.querySelectorAll(`mark[data-comment-id="${commentId}"]`);
-    marks.forEach(mark => {
+    document.querySelectorAll(`.doc-prose mark[data-comment-id="${commentId}"]`).forEach(mark => {
       const parent = mark.parentNode;
       while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
       parent.removeChild(mark);
     });
 
-    doc.body = prose.innerHTML;
+    saveAllProse();
     saveDocs();
     renderComments();
   }
 
   function highlightCommentInProse(commentId) {
-    const prose = document.getElementById("docProse");
-    prose.querySelectorAll("mark.comment-active").forEach(m => m.classList.remove("comment-active"));
+    document.querySelectorAll(".doc-prose mark.comment-active").forEach(m => m.classList.remove("comment-active"));
     document.querySelectorAll(".comment-card.active").forEach(c => c.classList.remove("active"));
 
-    const mark = prose.querySelector(`mark[data-comment-id="${commentId}"]`);
+    const mark = document.querySelector(`.doc-prose mark[data-comment-id="${commentId}"]`);
     if (mark) {
       mark.classList.add("comment-active");
       mark.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1577,11 +1921,13 @@
   }
 
   function setupContextMenu() {
-    const prose = document.getElementById("docProse");
     const menu = document.getElementById("docContextMenu");
     const addCommentBtn = document.getElementById("ctxAddComment");
 
-    prose.addEventListener("contextmenu", (e) => {
+    document.addEventListener("contextmenu", (e) => {
+      const prose = e.target.closest(".doc-prose");
+      if (!prose) return;
+
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
 
@@ -1621,13 +1967,6 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") menu.hidden = true;
     });
-
-    prose.addEventListener("click", (e) => {
-      const mark = e.target.closest("mark[data-comment-id]");
-      if (mark) {
-        highlightCommentInProse(mark.dataset.commentId);
-      }
-    });
   }
 
   // ---------- Init ----------
@@ -1643,32 +1982,24 @@
     document.getElementById("newDocBtn").addEventListener("click", createDoc);
     document.getElementById("newFolderBtn").addEventListener("click", createFolder);
     document.getElementById("addStoryBtn").addEventListener("click", addStory);
-    document.getElementById("addTaskBtn").addEventListener("click", addTask);
     document.getElementById("addTaskBtn2").addEventListener("click", addTask);
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
     document.getElementById("historyBtn").addEventListener("click", openVersionHistory);
-    document.getElementById("addColBtn").addEventListener("click", (e) => {
-      e.stopPropagation();
-      showAddColumnPopup(document.getElementById("addColBtn"), "global", null);
-    });
-
-    const prose = document.getElementById("docProse");
-    prose.addEventListener("input", () => {
-      const doc = currentDoc();
-      if (!doc) return;
-      doc.body = prose.innerHTML;
-      doc.updatedAt = new Date().toISOString();
-      saveDocs();
-    });
 
     document.querySelectorAll(".prose-btn").forEach((btn) => {
       btn.addEventListener("mousedown", (e) => {
-        e.preventDefault(); // keep focus in prose
+        e.preventDefault();
+        if (!activeProse) return;
         const cmd = btn.dataset.cmd;
         const val = btn.dataset.val || null;
         document.execCommand(cmd, false, val);
         const doc = currentDoc();
-        if (doc) { doc.body = prose.innerHTML; saveDocs(); }
+        if (doc) {
+          const blockId = activeProse.dataset.blockId;
+          const block = doc.blocks?.find(b => b.id === blockId);
+          if (block) { block.content = activeProse.innerHTML; doc.body = doc.blocks.filter(b => b.type === "prose").map(b => b.content || "").join("\n"); }
+          saveDocs();
+        }
       });
     });
 

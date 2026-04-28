@@ -73,30 +73,19 @@
         </div>
       </div>
       <p class="editor-empty" id="editorEmpty">Select or create a document to get started.</p>
-      <div id="proseArea" hidden>
-        <div class="prose-toolbar">
-          <button type="button" class="prose-btn" data-cmd="bold" title="Bold"><b>B</b></button>
-          <button type="button" class="prose-btn" data-cmd="italic" title="Italic"><i>I</i></button>
-          <button type="button" class="prose-btn" data-cmd="underline" title="Underline"><u>U</u></button>
-          <span class="prose-sep"></span>
-          <button type="button" class="prose-btn" data-cmd="formatBlock" data-val="h2" title="Heading 2">H2</button>
-          <button type="button" class="prose-btn" data-cmd="formatBlock" data-val="h3" title="Heading 3">H3</button>
-          <button type="button" class="prose-btn" data-cmd="formatBlock" data-val="p" title="Paragraph">¶</button>
-          <span class="prose-sep"></span>
-          <button type="button" class="prose-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
-          <button type="button" class="prose-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
-        </div>
-        <div class="doc-prose" id="docProse" contenteditable="true" data-placeholder="Start writing…"></div>
+      <div class="prose-toolbar" id="proseToolbar" hidden>
+        <button type="button" class="prose-btn" data-cmd="bold" title="Bold"><b>B</b></button>
+        <button type="button" class="prose-btn" data-cmd="italic" title="Italic"><i>I</i></button>
+        <button type="button" class="prose-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+        <span class="prose-sep"></span>
+        <button type="button" class="prose-btn" data-cmd="formatBlock" data-val="h2" title="Heading 2">H2</button>
+        <button type="button" class="prose-btn" data-cmd="formatBlock" data-val="h3" title="Heading 3">H3</button>
+        <button type="button" class="prose-btn" data-cmd="formatBlock" data-val="p" title="Paragraph">¶</button>
+        <span class="prose-sep"></span>
+        <button type="button" class="prose-btn" data-cmd="insertUnorderedList" title="Bullet list">•</button>
+        <button type="button" class="prose-btn" data-cmd="insertOrderedList" title="Numbered list">1.</button>
       </div>
-      <div id="tasksArea" hidden>
-        <div class="tasks-header">
-          <span class="tasks-label">Tasks</span>
-          <div class="tasks-col-chips" id="tasksColChips"></div>
-          <button type="button" class="btn btn-ghost btn-sm" id="addColBtn">+ Column</button>
-          <button type="button" class="btn btn-ghost btn-sm" id="addTaskBtn">+ Task</button>
-        </div>
-        <div class="tasks-list" id="tasksList"></div>
-      </div>
+      <div class="doc-blocks" id="docBlocks"></div>
       <div class="stories-divider" id="storiesDivider" hidden>
         <span>Stories</span>
       </div>
