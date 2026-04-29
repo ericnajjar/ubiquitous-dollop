@@ -180,17 +180,25 @@
 
   function renderTaskSlideHTML(content, ce, esc) {
     const tasks = sst().getTasks(content._taskIds || []);
-    const cols = sst().getColumns();
+    const globalCols = sst().getColumns();
+
+    const localColMap = new Map();
+    tasks.forEach(task => {
+      (task.localColumns || []).forEach(col => {
+        if (!localColMap.has(col.id)) localColMap.set(col.id, col);
+      });
+    });
+    const allCols = [...globalCols, ...localColMap.values()];
 
     let colHeaders = "";
-    cols.forEach(col => {
+    allCols.forEach(col => {
       colHeaders += `<th class="stask-th">${esc(col.name)}</th>`;
     });
 
     let rows = "";
     tasks.forEach((task, i) => {
       let cells = "";
-      cols.forEach(col => {
+      allCols.forEach(col => {
         const val = (task.colValues || {})[col.id] || "";
         if (col.type === "tags" && val) {
           const tags = val.split(",").filter(Boolean);
@@ -209,7 +217,7 @@
     });
 
     if (!tasks.length) {
-      rows = `<tr><td class="stask-td stask-empty" colspan="${1 + cols.length}">Click "Edit Tasks" to add tasks</td></tr>`;
+      rows = `<tr><td class="stask-td stask-empty" colspan="${1 + allCols.length}">Click "Edit Tasks" to add tasks</td></tr>`;
     }
 
     return `<div class="slide-content layout-tasks">
@@ -236,6 +244,175 @@
     });
   }
 
+  function showSlideColumnPopup(anchor, defaultScope, relatedTaskId, slide, rebuildRows) {
+    document.querySelector(".add-col-popup")?.remove();
+
+    const popup = document.createElement("div");
+    popup.className = "add-col-popup";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "acp-title";
+    titleEl.textContent = "New Column";
+    popup.appendChild(titleEl);
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "acp-field";
+    const nameLbl = document.createElement("label");
+    nameLbl.className = "acp-label";
+    nameLbl.textContent = "Name";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "acp-input";
+    nameInput.placeholder = "e.g. Status, Owner, Sprint…";
+    nameWrap.appendChild(nameLbl);
+    nameWrap.appendChild(nameInput);
+    popup.appendChild(nameWrap);
+
+    const scopeWrap = document.createElement("div");
+    scopeWrap.className = "acp-scope";
+    const scopeLbl = document.createElement("div");
+    scopeLbl.className = "acp-label";
+    scopeLbl.textContent = "Scope";
+    const scopeOpts = document.createElement("div");
+    scopeOpts.className = "acp-scope-options";
+    ["global", "local"].forEach((s) => {
+      const lbl = document.createElement("label");
+      lbl.className = "acp-scope-option";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "acp-scope-radio";
+      radio.value = s;
+      radio.checked = s === defaultScope;
+      const txt = document.createElement("span");
+      txt.textContent = s === "global" ? "Global — all tasks" : "Local — one task only";
+      lbl.appendChild(radio);
+      lbl.appendChild(txt);
+      scopeOpts.appendChild(lbl);
+    });
+    scopeWrap.appendChild(scopeLbl);
+    scopeWrap.appendChild(scopeOpts);
+    popup.appendChild(scopeWrap);
+
+    let taskSelWrap = null;
+    if (relatedTaskId === null) {
+      taskSelWrap = document.createElement("div");
+      taskSelWrap.className = "acp-field";
+      taskSelWrap.hidden = defaultScope === "global";
+      const taskSelLbl = document.createElement("label");
+      taskSelLbl.className = "acp-label";
+      taskSelLbl.textContent = "Apply to task";
+      const taskSel = document.createElement("select");
+      taskSel.className = "acp-select";
+      taskSel.id = "acp-task-sel";
+      const allTasks = sst().getTasks(slide.content._taskIds || []);
+      if (allTasks.length) {
+        allTasks.forEach((t) => {
+          const opt = document.createElement("option");
+          opt.value = t.id;
+          opt.textContent = t.text || "Untitled task";
+          taskSel.appendChild(opt);
+        });
+      } else {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "No tasks yet";
+        taskSel.appendChild(opt);
+      }
+      taskSelWrap.appendChild(taskSelLbl);
+      taskSelWrap.appendChild(taskSel);
+      popup.appendChild(taskSelWrap);
+
+      scopeOpts.querySelectorAll("input[type='radio']").forEach((r) => {
+        r.addEventListener("change", () => {
+          const sel = popup.querySelector("input[name='acp-scope-radio']:checked")?.value;
+          taskSelWrap.hidden = sel !== "local";
+        });
+      });
+    }
+
+    const typeWrap = document.createElement("div");
+    typeWrap.className = "acp-field";
+    const typeLbl = document.createElement("label");
+    typeLbl.className = "acp-label";
+    typeLbl.textContent = "Type";
+    const typeSel = document.createElement("select");
+    typeSel.className = "acp-select";
+    [["text", "Text"], ["dropdown", "Dropdown"], ["tags", "Tags"]].forEach(([val, txt]) => {
+      const o = document.createElement("option");
+      o.value = val;
+      o.textContent = txt;
+      typeSel.appendChild(o);
+    });
+    typeWrap.appendChild(typeLbl);
+    typeWrap.appendChild(typeSel);
+    popup.appendChild(typeWrap);
+
+    const optionsWrap = document.createElement("div");
+    optionsWrap.className = "acp-field";
+    optionsWrap.hidden = true;
+    const optionsLbl = document.createElement("label");
+    optionsLbl.className = "acp-label";
+    optionsLbl.textContent = "Options (one per line)";
+    const optionsInput = document.createElement("textarea");
+    optionsInput.className = "acp-textarea";
+    optionsInput.rows = 3;
+    optionsInput.placeholder = "e.g.\nTo Do\nIn Progress\nDone";
+    optionsWrap.appendChild(optionsLbl);
+    optionsWrap.appendChild(optionsInput);
+    popup.appendChild(optionsWrap);
+
+    typeSel.addEventListener("change", () => {
+      optionsWrap.hidden = typeSel.value === "text";
+      optionsLbl.textContent = typeSel.value === "tags" ? "Tags (one per line)" : "Options (one per line)";
+    });
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "btn btn-primary btn-sm acp-add-btn";
+    addBtn.textContent = "Add Column";
+    addBtn.addEventListener("click", () => {
+      const name = nameInput.value.trim();
+      if (!name) { nameInput.focus(); return; }
+      const colType = typeSel.value;
+      const options = colType !== "text"
+        ? optionsInput.value.split("\n").map(s => s.trim()).filter(Boolean)
+        : [];
+      if (colType !== "text" && !options.length) { optionsInput.focus(); return; }
+      const colDef = { id: uid(), name, type: colType };
+      if (options.length) colDef.options = options;
+      const scope = popup.querySelector("input[name='acp-scope-radio']:checked")?.value || "global";
+      if (scope === "global") {
+        sst().addColumn(colDef);
+      } else {
+        const taskId = relatedTaskId !== null ? relatedTaskId : (popup.querySelector("#acp-task-sel")?.value || null);
+        if (!taskId) return;
+        const task = sst().getTask(taskId);
+        if (!task) return;
+        if (!task.localColumns) task.localColumns = [];
+        task.localColumns.push(colDef);
+        sst().forceSave();
+      }
+      saveState();
+      rebuildRows();
+      renderSlidePreview();
+      popup.remove();
+      document.removeEventListener("click", dismiss, true);
+    });
+    popup.appendChild(addBtn);
+
+    document.body.appendChild(popup);
+    const rect = anchor.getBoundingClientRect();
+    popup.style.top = (rect.bottom + 6) + "px";
+    popup.style.left = Math.max(10, Math.min(rect.left, window.innerWidth - 270)) + "px";
+
+    function dismiss(e) {
+      if (!popup.contains(e.target) && e.target !== anchor) {
+        popup.remove();
+        document.removeEventListener("click", dismiss, true);
+      }
+    }
+    setTimeout(() => { document.addEventListener("click", dismiss, true); nameInput.focus(); }, 0);
+  }
+
   function openSlideTaskEditor() {
     closeSlideTaskEditor();
     const slide = currentSlide();
@@ -257,18 +434,7 @@
     addColBtn.className = "ste-btn";
     addColBtn.textContent = "+ Column";
     addColBtn.addEventListener("click", () => {
-      const name = prompt("Column name:");
-      if (!name) return;
-      const type = prompt("Type (text, dropdown, tags):", "text") || "text";
-      let options = [];
-      if (type === "dropdown" || type === "tags") {
-        const raw = prompt("Options (comma-separated):");
-        if (raw) options = raw.split(",").map(s => s.trim()).filter(Boolean);
-      }
-      sst().addColumn({ id: uid(), name, type, options });
-      saveState();
-      rebuildRows();
-      renderSlidePreview();
+      showSlideColumnPopup(addColBtn, "global", null, slide, rebuildRows);
     });
     header.appendChild(addColBtn);
 
@@ -361,10 +527,13 @@
         });
         row.appendChild(text);
 
-        cols.forEach(col => {
+        const allCols = [...cols, ...(task.localColumns || [])];
+        allCols.forEach(col => {
+          const isLocal = (task.localColumns || []).some(c => c.id === col.id);
           if (col.type === "dropdown") {
             const sel = document.createElement("select");
             sel.className = "ste-col-input";
+            if (isLocal) sel.title = col.name + " (local)";
             const empty = document.createElement("option");
             empty.value = ""; empty.textContent = "—";
             sel.appendChild(empty);
@@ -408,6 +577,7 @@
             const input = document.createElement("input");
             input.type = "text";
             input.className = "ste-col-input";
+            if (isLocal) input.title = col.name + " (local)";
             input.value = (task.colValues || {})[col.id] || "";
             input.placeholder = "—";
             input.addEventListener("input", () => {
@@ -419,7 +589,32 @@
             });
             row.appendChild(input);
           }
+          if (isLocal) {
+            const localDel = document.createElement("button");
+            localDel.className = "ste-col-del";
+            localDel.textContent = "×";
+            localDel.title = "Remove local column '" + col.name + "'";
+            localDel.addEventListener("click", () => {
+              task.localColumns = (task.localColumns || []).filter(c => c.id !== col.id);
+              if (task.colValues) delete task.colValues[col.id];
+              (task.children || []).forEach(ch => { if (ch.colValues) delete ch.colValues[col.id]; });
+              sst().forceSave();
+              saveState();
+              rebuildRows();
+              renderSlidePreview();
+            });
+            row.appendChild(localDel);
+          }
         });
+
+        const addLocalColBtn = document.createElement("button");
+        addLocalColBtn.className = "ste-local-col-btn";
+        addLocalColBtn.title = "Add local column (this task only)";
+        addLocalColBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="11" height="11"><rect x="1" y="2" width="4" height="12" rx="1" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M9 8h4M11 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+        addLocalColBtn.addEventListener("click", () => {
+          showSlideColumnPopup(addLocalColBtn, "local", task.id, slide, rebuildRows);
+        });
+        row.appendChild(addLocalColBtn);
 
         const shareBtn = document.createElement("button");
         shareBtn.className = "ste-share-btn" + (task.shared ? " active" : "");
