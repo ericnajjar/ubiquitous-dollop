@@ -1,0 +1,139 @@
+/* Feedback floating button */
+.feedback-fab {
+  position: fixed; bottom: 24px; right: 24px; z-index: 150;
+  width: 48px; height: 48px; border-radius: 50%;
+  background: linear-gradient(135deg, #6ea8ff, #8b5cf6);
+  border: none; color: white; font-size: 22px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 16px rgba(110,168,255,.35);
+  transition: transform .15s, box-shadow .2s;
+}
+.feedback-fab:hover { transform: scale(1.1); box-shadow: 0 6px 24px rgba(110,168,255,.45); }
+.feedback-fab svg { width: 22px; height: 22px; }
+
+/* Modal overlay */
+.feedback-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.5); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.feedback-overlay[hidden] { display: none; }
+
+/* Modal */
+.feedback-modal {
+  width: 440px; max-width: calc(100vw - 32px); max-height: calc(100vh - 64px);
+  background: #161d3d; border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; overflow: hidden;
+  animation: fbSlideUp .2s ease-out;
+}
+@keyframes fbSlideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+.feedback-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 22px; border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.feedback-modal-header h2 { margin: 0; font-size: 17px; color: #e7ecff; font-weight: 700; }
+.feedback-modal-close {
+  width: 30px; height: 30px; border-radius: 8px; border: none;
+  background: transparent; color: #9aa4c7; cursor: pointer; font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, color .15s;
+}
+.feedback-modal-close:hover { background: #1d254a; color: #e7ecff; }
+
+.feedback-modal-body { padding: 20px 22px; overflow-y: auto; flex: 1; }
+
+.feedback-field { margin-bottom: 16px; }
+.feedback-field label {
+  display: block; font-size: 12px; font-weight: 700; color: #9aa4c7;
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px;
+}
+.feedback-field select,
+.feedback-field input,
+.feedback-field textarea {
+  width: 100%; font: inherit; font-size: 14px; color: #e7ecff;
+  background: #1d254a; border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px; padding: 10px 12px; outline: none;
+  transition: border-color .2s; box-sizing: border-box;
+}
+.feedback-field select:focus,
+.feedback-field input:focus,
+.feedback-field textarea:focus { border-color: #6ea8ff; }
+.feedback-field select::placeholder,
+.feedback-field input::placeholder,
+.feedback-field textarea::placeholder { color: #5a6490; }
+.feedback-field textarea { resize: vertical; min-height: 100px; }
+.feedback-field select {
+  appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239aa4c7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  padding-right: 32px;
+}
+.feedback-field select option { background: #161d3d; color: #e7ecff; }
+
+.feedback-modal-footer {
+  padding: 14px 22px; border-top: 1px solid rgba(255,255,255,.08);
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+}
+.feedback-modal-footer .btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 10px 20px; border-radius: 10px; font-weight: 600; font-size: 14px;
+  border: 1px solid transparent; cursor: pointer; font-family: inherit;
+  transition: transform .1s, background .2s, border-color .2s;
+}
+.feedback-modal-footer .btn:active { transform: translateY(1px); }
+.feedback-modal-footer .btn-primary {
+  background: linear-gradient(135deg, #6ea8ff, #8b5cf6); color: white;
+}
+.feedback-modal-footer .btn-primary:hover { filter: brightness(1.08); }
+.feedback-modal-footer .btn-primary:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+.feedback-modal-footer .btn-ghost {
+  background: transparent; border-color: rgba(255,255,255,.08); color: #e7ecff;
+}
+.feedback-modal-footer .btn-ghost:hover { border-color: #6ea8ff; color: #6ea8ff; }
+
+/* Status */
+.feedback-status { font-size: 13px; margin-right: auto; }
+.feedback-status.success { color: #4ade80; }
+.feedback-status.error { color: #f87171; }
+
+/* History list */
+.feedback-history { margin-top: 8px; }
+.feedback-history-title {
+  font-size: 12px; font-weight: 700; color: #9aa4c7;
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.feedback-history-toggle {
+  background: transparent; border: none; color: #6ea8ff;
+  cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit;
+}
+.feedback-history-toggle:hover { text-decoration: underline; }
+.feedback-history-list { display: flex; flex-direction: column; gap: 8px; }
+.feedback-history-item {
+  padding: 10px 12px; background: #1d254a;
+  border: 1px solid rgba(255,255,255,.06); border-radius: 10px;
+}
+.feedback-history-item-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.feedback-history-badge {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px;
+  text-transform: capitalize;
+}
+.feedback-history-badge.feature { background: rgba(110,168,255,.12); color: #6ea8ff; }
+.feedback-history-badge.bug { background: rgba(248,113,113,.12); color: #f87171; }
+.feedback-history-badge.improvement { background: rgba(251,191,36,.12); color: #fbbf24; }
+.feedback-history-badge.other { background: rgba(154,164,199,.12); color: #9aa4c7; }
+.feedback-history-time { font-size: 11px; color: #5a6490; }
+.feedback-history-text { font-size: 13px; color: #c8d0e7; line-height: 1.5; }
+.feedback-history-empty {
+  font-size: 13px; color: #5a6490; text-align: center;
+  padding: 16px 0; font-style: italic;
+}
+
+@media (max-width: 480px) {
+  .feedback-fab { bottom: 16px; right: 16px; width: 44px; height: 44px; }
+  .feedback-modal { border-radius: 12px; }
+}
