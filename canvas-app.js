@@ -143,6 +143,23 @@
     }
   }
 
+  function cst() { return window.datascope.sharedTasks; }
+
+  function migrateCanvasTasksToShared() {
+    const shared = cst();
+    canvases.forEach(cv => {
+      (cv.shapes || []).forEach(shape => {
+        if (shape.type === "taskblock" && shape.tasks && shape.tasks.length) {
+          const { idMap } = shared.importTasks(shape.tasks, shape.taskColumns || []);
+          shape.taskIds = shape.tasks.map(t => idMap[t.id] || t.id);
+          delete shape.tasks;
+          delete shape.taskColumns;
+        }
+      });
+    });
+    save();
+  }
+
   // ---------- Canvas management ----------
   function createCanvas(name) {
     syncFromState();
@@ -606,8 +623,8 @@
   }
 
   function drawTaskBlock(s, selected) {
-    const tasks = s.tasks || [];
-    const cols = s.taskColumns || [];
+    const tasks = cst().getTasks(s.taskIds || []);
+    const cols = cst().getColumns();
     const rowH = 28;
     const headerH = 32;
     const pad = 10;
@@ -1816,6 +1833,7 @@
     const center = screenToWorld(vp.clientWidth / 2, vp.clientHeight / 2);
     const shapeW = 360;
     const shapeH = 120;
+    const firstTask = cst().createTask({ text: "" });
     const shape = {
       id: uid(),
       type: "taskblock",
@@ -1826,8 +1844,7 @@
       fill: "#111733",
       stroke: state.strokeColor,
       strokeWidth: 1,
-      tasks: [{ id: uid(), text: "", colValues: {} }],
-      taskColumns: [],
+      taskIds: [firstTask.id],
     };
     state.shapes.push(shape);
     state.selected = new Set([shape.id]);
@@ -1839,14 +1856,15 @@
   function autoSizeTaskBlock(shape) {
     const rowH = 28;
     const headerH = 32;
-    const tasks = shape.tasks || [];
-    const cols = shape.taskColumns || [];
+    const tasks = cst().getTasks(shape.taskIds || []);
+    const cols = cst().getColumns();
     shape.h = Math.max(80, headerH + tasks.length * rowH + 12);
     shape.w = Math.max(240, 150 + cols.length * 90);
   }
 
   function openTaskBlockEditor(shape) {
     closeTaskBlockEditor();
+    if (!shape.taskIds) shape.taskIds = [];
     const overlay = document.createElement("div");
     overlay.className = "canvas-taskblock-editor";
     overlay.id = "taskBlockEditor";
@@ -1871,8 +1889,7 @@
         const raw = prompt("Options (comma-separated):");
         if (raw) options = raw.split(",").map(s => s.trim()).filter(Boolean);
       }
-      if (!shape.taskColumns) shape.taskColumns = [];
-      shape.taskColumns.push({ id: uid(), name, type, options });
+      cst().addColumn({ id: uid(), name, type, options });
       autoSizeTaskBlock(shape);
       save(); draw();
       rebuildRows();
@@ -1883,8 +1900,8 @@
     addTaskBtn.className = "tbe-btn";
     addTaskBtn.textContent = "+ Task";
     addTaskBtn.addEventListener("click", () => {
-      if (!shape.tasks) shape.tasks = [];
-      shape.tasks.push({ id: uid(), text: "", colValues: {} });
+      const task = cst().createTask({ text: "" });
+      shape.taskIds.push(task.id);
       autoSizeTaskBlock(shape);
       save(); draw();
       rebuildRows();
@@ -1894,6 +1911,24 @@
       }, 30);
     });
     header.appendChild(addTaskBtn);
+
+    const linkBtn = document.createElement("button");
+    linkBtn.className = "tbe-btn";
+    linkBtn.textContent = "Link";
+    linkBtn.title = "Link existing task";
+    linkBtn.addEventListener("click", () => {
+      cst().buildTaskPicker({
+        excludeIds: shape.taskIds,
+        anchorEl: linkBtn,
+        onSelect(taskId) {
+          shape.taskIds.push(taskId);
+          autoSizeTaskBlock(shape);
+          save(); draw();
+          rebuildRows();
+        },
+      });
+    });
+    header.appendChild(linkBtn);
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "tbe-close";
@@ -1909,7 +1944,7 @@
 
     function rebuildRows() {
       body.innerHTML = "";
-      const cols = shape.taskColumns || [];
+      const cols = cst().getColumns();
 
       if (cols.length) {
         const colHeader = document.createElement("div");
@@ -1922,8 +1957,7 @@
           del.className = "tbe-col-del";
           del.textContent = "×";
           del.addEventListener("click", () => {
-            shape.taskColumns = shape.taskColumns.filter(c => c.id !== col.id);
-            (shape.tasks || []).forEach(t => { if (t.colValues) delete t.colValues[col.id]; });
+            cst().deleteColumn(col.id);
             autoSizeTaskBlock(shape);
             save(); draw();
             rebuildRows();
@@ -1934,7 +1968,7 @@
         body.appendChild(colHeader);
       }
 
-      (shape.tasks || []).forEach(task => {
+      cst().getTasks(shape.taskIds).forEach(task => {
         const row = document.createElement("div");
         row.className = "tbe-row";
 
@@ -1945,6 +1979,7 @@
         text.placeholder = "Task…";
         text.addEventListener("input", () => {
           task.text = text.value;
+          cst().forceSave();
           save(); draw();
         });
         row.appendChild(text);
@@ -1965,6 +2000,7 @@
             sel.addEventListener("change", () => {
               if (!task.colValues) task.colValues = {};
               task.colValues[col.id] = sel.value;
+              cst().forceSave();
               save(); draw();
             });
             row.appendChild(sel);
@@ -1983,6 +2019,7 @@
                 else { selected.push(tag); chip.classList.add("active"); }
                 if (!task.colValues) task.colValues = {};
                 task.colValues[col.id] = selected.join(",");
+                cst().forceSave();
                 save(); draw();
               });
               wrap.appendChild(chip);
@@ -1997,6 +2034,7 @@
             input.addEventListener("input", () => {
               if (!task.colValues) task.colValues = {};
               task.colValues[col.id] = input.value;
+              cst().forceSave();
               save(); draw();
             });
             row.appendChild(input);
@@ -2007,7 +2045,8 @@
         delBtn.className = "tbe-row-del";
         delBtn.textContent = "×";
         delBtn.addEventListener("click", () => {
-          shape.tasks = shape.tasks.filter(t => t.id !== task.id);
+          cst().deleteTask(task.id);
+          shape.taskIds = shape.taskIds.filter(id => id !== task.id);
           autoSizeTaskBlock(shape);
           save(); draw();
           rebuildRows();
@@ -2076,6 +2115,7 @@
     const viewport = document.getElementById("viewport");
 
     load();
+    migrateCanvasTasksToShared();
     updateZoomLabel();
     buildCanvasBar();
 
@@ -2247,6 +2287,10 @@
       updateZoomLabel();
       buildCanvasBar();
       draw();
+    });
+
+    window.addEventListener("datascope:taskchange", (e) => {
+      if (e.detail?.type === "external") draw();
     });
   }
 

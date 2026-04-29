@@ -19,14 +19,16 @@
 
   function saveDocs() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state.docs)); } catch (_) {}
+    st().forceSave();
     const doc = currentDoc();
     if (doc && window.datascope?.versions) {
+      const tasks = getDocTasks(doc);
       window.datascope.versions.saveSnapshot(STORE_KEY, doc.id, {
         title: doc.title,
         body: doc.body,
         blocks: doc.blocks,
-        tasks: doc.tasks,
-        taskColumns: doc.taskColumns,
+        tasks: tasks,
+        taskColumns: st().getColumns(),
         stories: doc.stories,
         comments: doc.comments,
       });
@@ -46,9 +48,10 @@
       },
       getCurrentData() {
         saveAllProse();
+        const tasks = getDocTasks(doc);
         return {
           title: doc.title, body: doc.body, blocks: doc.blocks,
-          tasks: doc.tasks, taskColumns: doc.taskColumns,
+          tasks, taskColumns: st().getColumns(),
           stories: doc.stories, comments: doc.comments,
         };
       },
@@ -56,8 +59,7 @@
         doc.title = snap.title || doc.title;
         doc.body = snap.body || "";
         doc.blocks = snap.blocks || null;
-        doc.tasks = snap.tasks || [];
-        doc.taskColumns = snap.taskColumns || [];
+        if (snap.tasks) st().importTasks(snap.tasks, snap.taskColumns || []);
         doc.stories = snap.stories || [];
         doc.comments = snap.comments || [];
         saveDocs();
@@ -93,6 +95,30 @@
     currentDocId: null,
     openFolders: new Set(),
   };
+
+  function st() { return window.datascope.sharedTasks; }
+
+  function migrateDocsToSharedTasks() {
+    const shared = st();
+    state.docs.forEach(doc => {
+      if (doc.tasks && doc.tasks.length) {
+        shared.importTasks(doc.tasks, doc.taskColumns || []);
+        delete doc.tasks;
+        delete doc.taskColumns;
+      } else if (doc.taskColumns && doc.taskColumns.length) {
+        shared.importTasks([], doc.taskColumns);
+        delete doc.taskColumns;
+      }
+    });
+    saveDocs();
+  }
+
+  function getDocTasks(doc) {
+    if (!doc || !doc.blocks) return [];
+    const ids = [];
+    doc.blocks.forEach(b => { if (b.type === "tasks" && b.taskIds) ids.push(...b.taskIds); });
+    return st().getTasks(ids);
+  }
 
   function currentDoc() {
     return state.docs.find((d) => d.id === state.currentDocId) || null;
@@ -268,7 +294,10 @@
     doc.blocks = [];
     if (doc.body) doc.blocks.push({ id: uid(), type: "prose", content: doc.body });
     if (doc.tasks && doc.tasks.length) {
+      st().importTasks(doc.tasks, doc.taskColumns || []);
       doc.blocks.push({ id: uid(), type: "tasks", taskIds: doc.tasks.map(t => t.id) });
+      delete doc.tasks;
+      delete doc.taskColumns;
     }
     if (!doc.blocks.length) doc.blocks.push({ id: uid(), type: "prose", content: "" });
   }
@@ -348,8 +377,7 @@
     wrap.className = "doc-block doc-task-block";
     wrap.dataset.blockId = block.id;
 
-    if (!doc.taskColumns) doc.taskColumns = [];
-    const tasks = (block.taskIds || []).map(id => (doc.tasks || []).find(t => t.id === id)).filter(Boolean);
+    const tasks = st().getTasks(block.taskIds || []);
 
     const header = document.createElement("div");
     header.className = "tasks-header";
@@ -361,7 +389,7 @@
 
     const colChips = document.createElement("div");
     colChips.className = "tasks-col-chips";
-    doc.taskColumns.forEach(col => {
+    st().getColumns().forEach(col => {
       const chip = document.createElement("span");
       chip.className = "tasks-col-chip";
       const name = document.createElement("span");
@@ -391,6 +419,16 @@
     addTaskBtn.textContent = "+ Task";
     addTaskBtn.addEventListener("click", () => addTaskToBlock(block.id));
     header.appendChild(addTaskBtn);
+
+    const linkTaskBtn = document.createElement("button");
+    linkTaskBtn.className = "btn btn-ghost btn-sm";
+    linkTaskBtn.textContent = "Link";
+    linkTaskBtn.title = "Link existing task from other tools";
+    linkTaskBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showTaskPicker(linkTaskBtn, block);
+    });
+    header.appendChild(linkTaskBtn);
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn btn-ghost btn-sm danger";
@@ -462,9 +500,7 @@
     if (type === "prose") {
       block.content = "";
     } else if (type === "tasks") {
-      const task = { id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} };
-      if (!doc.tasks) doc.tasks = [];
-      doc.tasks.push(task);
+      const task = st().createTask({ text: "" });
       block.taskIds = [task.id];
     }
 
@@ -492,8 +528,7 @@
     if (!block) return;
 
     if (block.type === "tasks") {
-      const taskIds = new Set(block.taskIds || []);
-      doc.tasks = (doc.tasks || []).filter(t => !taskIds.has(t.id));
+      (block.taskIds || []).forEach(id => st().deleteTask(id));
     }
 
     doc.blocks = doc.blocks.filter(b => b.id !== blockId);
@@ -507,9 +542,7 @@
     if (!doc) return;
     const block = doc.blocks.find(b => b.id === blockId);
     if (!block || block.type !== "tasks") return;
-    if (!doc.tasks) doc.tasks = [];
-    const task = { id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} };
-    doc.tasks.push(task);
+    const task = st().createTask({ text: "" });
     if (!block.taskIds) block.taskIds = [];
     block.taskIds.push(task.id);
     saveDocs();
@@ -687,15 +720,7 @@
   }
 
   function deleteGlobalColumn(colId) {
-    const doc = currentDoc();
-    if (!doc) return;
-    doc.taskColumns = (doc.taskColumns || []).filter((c) => c.id !== colId);
-    (doc.tasks || []).forEach((task) => {
-      if (task.colValues) delete task.colValues[colId];
-      (task.children || []).forEach((child) => {
-        if (child.colValues) delete child.colValues[colId];
-      });
-    });
+    st().deleteColumn(colId);
     saveDocs();
     renderTasks();
   }
@@ -772,8 +797,9 @@
       const taskSel = document.createElement("select");
       taskSel.className = "acp-select";
       taskSel.id = "acp-task-sel";
-      if (doc.tasks && doc.tasks.length) {
-        doc.tasks.forEach((t) => {
+      const allTasks = getDocTasks(doc);
+      if (allTasks.length) {
+        allTasks.forEach((t) => {
           const opt = document.createElement("option");
           opt.value = t.id;
           opt.textContent = t.text || "Untitled task";
@@ -848,12 +874,11 @@
       if (options.length) colDef.options = options;
       const scope = popup.querySelector("input[name='acp-scope-radio']:checked")?.value || "global";
       if (scope === "global") {
-        if (!doc.taskColumns) doc.taskColumns = [];
-        doc.taskColumns.push(colDef);
+        st().addColumn(colDef);
       } else {
         const taskId = relatedTaskId !== null ? relatedTaskId : (popup.querySelector("#acp-task-sel")?.value || null);
         if (!taskId) return;
-        const task = (doc.tasks || []).find((t) => t.id === taskId);
+        const task = st().getTask(taskId);
         if (!task) return;
         if (!task.localColumns) task.localColumns = [];
         task.localColumns.push(colDef);
@@ -881,6 +906,19 @@
 
   function renderTasks() {
     renderBlocks(true);
+  }
+
+  function showTaskPicker(anchor, block) {
+    st().buildTaskPicker({
+      excludeIds: block.taskIds || [],
+      anchorEl: anchor,
+      onSelect(taskId) {
+        if (!block.taskIds) block.taskIds = [];
+        block.taskIds.push(taskId);
+        saveDocs();
+        renderBlocks(true);
+      },
+    });
   }
 
   function buildTaskRow(task, block) {
@@ -947,8 +985,7 @@
     row.appendChild(header);
 
     // Column value fields
-    const docRef = currentDoc();
-    const globalCols = (docRef && docRef.taskColumns) || [];
+    const globalCols = st().getColumns();
     const localCols = task.localColumns || [];
     if (globalCols.length || localCols.length) {
       const colValues = document.createElement("div");
@@ -993,19 +1030,11 @@
     row.addEventListener("drop", (e) => {
       e.preventDefault();
       if (!dragSrcTaskId || dragSrcTaskId === task.id) return;
-      const doc = currentDoc();
-      if (!doc) return;
+      if (!block || !block.taskIds) return;
       const insertAfter = e.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
-      const srcIdx = doc.tasks.findIndex((t) => t.id === dragSrcTaskId);
-      if (srcIdx === -1) return;
-      const [moved] = doc.tasks.splice(srcIdx, 1);
-      const dstIdx = doc.tasks.findIndex((t) => t.id === task.id);
-      doc.tasks.splice(insertAfter ? dstIdx + 1 : dstIdx, 0, moved);
-      if (block && block.taskIds) {
-        block.taskIds = block.taskIds.filter(id => id !== dragSrcTaskId);
-        const dstBlockIdx = block.taskIds.indexOf(task.id);
-        block.taskIds.splice(insertAfter ? dstBlockIdx + 1 : dstBlockIdx, 0, dragSrcTaskId);
-      }
+      block.taskIds = block.taskIds.filter(id => id !== dragSrcTaskId);
+      const dstBlockIdx = block.taskIds.indexOf(task.id);
+      block.taskIds.splice(insertAfter ? dstBlockIdx + 1 : dstBlockIdx, 0, dragSrcTaskId);
       clearDropIndicators();
       saveDocs();
       renderTasks();
@@ -1019,19 +1048,14 @@
       saveDocs();
     });
 
-    text.addEventListener("input", () => { task.text = text.value; saveDocs(); });
+    text.addEventListener("input", () => { task.text = text.value; st().forceSave(); saveDocs(); });
     text.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      const doc = currentDoc();
-      if (!doc) return;
-      const newTask = { id: uid(), text: "", expanded: false, children: [], linkedCard: null, localColumns: [], colValues: {} };
-      const idx = doc.tasks.findIndex((t) => t.id === task.id);
-      doc.tasks.splice(idx + 1, 0, newTask);
-      if (block && block.taskIds) {
-        const blockIdx = block.taskIds.indexOf(task.id);
-        block.taskIds.splice(blockIdx + 1, 0, newTask.id);
-      }
+      if (!block || !block.taskIds) return;
+      const newTask = st().createTask({ text: "" });
+      const blockIdx = block.taskIds.indexOf(task.id);
+      block.taskIds.splice(blockIdx + 1, 0, newTask.id);
       saveDocs();
       renderTasks();
       if (block) {
@@ -1063,9 +1087,7 @@
     });
 
     delBtn.addEventListener("click", () => {
-      const doc = currentDoc();
-      if (!doc) return;
-      doc.tasks = doc.tasks.filter((t) => t.id !== task.id);
+      st().deleteTask(task.id);
       if (block && block.taskIds) {
         block.taskIds = block.taskIds.filter(id => id !== task.id);
       }
@@ -1185,8 +1207,7 @@
     });
 
     // Column value fields (global + parent local)
-    const docRef = currentDoc();
-    const globalCols = (docRef && docRef.taskColumns) || [];
+    const globalCols = st().getColumns();
     const localCols = parent.localColumns || [];
     if (globalCols.length || localCols.length) {
       const colValues = document.createElement("div");
@@ -1342,14 +1363,12 @@
     const doc = currentDoc();
     if (!doc) return;
     ensureBlocks(doc);
-    if (!doc.tasks) doc.tasks = [];
 
     const taskBlock = doc.blocks.find(b => b.type === "tasks");
     if (taskBlock) {
       addTaskToBlock(taskBlock.id);
     } else {
-      const task = { id: uid(), text: "", expanded: false, children: [], localColumns: [], colValues: {} };
-      doc.tasks.push(task);
+      const task = st().createTask({ text: "" });
       const block = { id: uid(), type: "tasks", taskIds: [task.id] };
       doc.blocks.push(block);
       saveDocs();
@@ -1973,6 +1992,8 @@
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
 
+    migrateDocsToSharedTasks();
+
     if (state.docs.length) state.currentDocId = state.docs[0].id;
 
     renderSidebar();
@@ -2035,6 +2056,10 @@
       state.currentDocId = docs.length ? docs[0].id : null;
       renderSidebar();
       renderEditor();
+    });
+
+    window.addEventListener("datascope:taskchange", (e) => {
+      if (e.detail?.type === "external") renderBlocks(true);
     });
   }
 

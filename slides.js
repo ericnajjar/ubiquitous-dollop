@@ -62,7 +62,7 @@
     },
     tasks: {
       name: "Task Table",
-      fields: { title: "Tasks", _tasks: [], _taskColumns: [] },
+      fields: { title: "Tasks", _taskIds: [] },
     },
   };
 
@@ -160,9 +160,27 @@
     }
   }
 
+  function sst() { return window.datascope.sharedTasks; }
+
+  function migrateSlideTasksToShared() {
+    const shared = sst();
+    if (!shared || !state.projects) return;
+    state.projects.forEach(proj => {
+      (proj.slides || []).forEach(slide => {
+        if (slide.template === "tasks" && slide.content?._tasks?.length) {
+          const { idMap } = shared.importTasks(slide.content._tasks, slide.content._taskColumns || []);
+          slide.content._taskIds = slide.content._tasks.map(t => idMap[t.id] || t.id);
+          delete slide.content._tasks;
+          delete slide.content._taskColumns;
+        }
+      });
+    });
+    saveState();
+  }
+
   function renderTaskSlideHTML(content, ce, esc) {
-    const tasks = content._tasks || [];
-    const cols = content._taskColumns || [];
+    const tasks = sst().getTasks(content._taskIds || []);
+    const cols = sst().getColumns();
 
     let colHeaders = "";
     cols.forEach(col => {
@@ -221,8 +239,7 @@
     closeSlideTaskEditor();
     const slide = currentSlide();
     if (!slide || slide.template !== "tasks") return;
-    if (!slide.content._tasks) slide.content._tasks = [];
-    if (!slide.content._taskColumns) slide.content._taskColumns = [];
+    if (!slide.content._taskIds) slide.content._taskIds = [];
 
     const overlay = document.createElement("div");
     overlay.className = "slide-task-editor";
@@ -247,7 +264,7 @@
         const raw = prompt("Options (comma-separated):");
         if (raw) options = raw.split(",").map(s => s.trim()).filter(Boolean);
       }
-      slide.content._taskColumns.push({ id: uid(), name, type, options });
+      sst().addColumn({ id: uid(), name, type, options });
       saveState();
       rebuildRows();
       renderSlidePreview();
@@ -258,7 +275,8 @@
     addTaskBtn.className = "ste-btn";
     addTaskBtn.textContent = "+ Task";
     addTaskBtn.addEventListener("click", () => {
-      slide.content._tasks.push({ id: uid(), text: "", colValues: {} });
+      const task = sst().createTask({ text: "" });
+      slide.content._taskIds.push(task.id);
       saveState();
       rebuildRows();
       renderSlidePreview();
@@ -268,6 +286,24 @@
       }, 30);
     });
     header.appendChild(addTaskBtn);
+
+    const linkBtn = document.createElement("button");
+    linkBtn.className = "ste-btn";
+    linkBtn.textContent = "Link";
+    linkBtn.title = "Link existing task";
+    linkBtn.addEventListener("click", () => {
+      sst().buildTaskPicker({
+        excludeIds: slide.content._taskIds,
+        anchorEl: linkBtn,
+        onSelect(taskId) {
+          slide.content._taskIds.push(taskId);
+          saveState();
+          rebuildRows();
+          renderSlidePreview();
+        },
+      });
+    });
+    header.appendChild(linkBtn);
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "ste-close";
@@ -283,7 +319,7 @@
 
     function rebuildRows() {
       body.innerHTML = "";
-      const cols = slide.content._taskColumns || [];
+      const cols = sst().getColumns();
 
       if (cols.length) {
         const colHeader = document.createElement("div");
@@ -296,8 +332,7 @@
           del.className = "ste-col-del";
           del.textContent = "×";
           del.addEventListener("click", () => {
-            slide.content._taskColumns = slide.content._taskColumns.filter(c => c.id !== col.id);
-            (slide.content._tasks || []).forEach(t => { if (t.colValues) delete t.colValues[col.id]; });
+            sst().deleteColumn(col.id);
             saveState();
             rebuildRows();
             renderSlidePreview();
@@ -308,7 +343,7 @@
         body.appendChild(colHeader);
       }
 
-      (slide.content._tasks || []).forEach(task => {
+      sst().getTasks(slide.content._taskIds).forEach(task => {
         const row = document.createElement("div");
         row.className = "ste-row";
 
@@ -319,6 +354,7 @@
         text.placeholder = "Task…";
         text.addEventListener("input", () => {
           task.text = text.value;
+          sst().forceSave();
           saveState();
           renderSlidePreview();
         });
@@ -340,6 +376,7 @@
             sel.addEventListener("change", () => {
               if (!task.colValues) task.colValues = {};
               task.colValues[col.id] = sel.value;
+              sst().forceSave();
               saveState();
               renderSlidePreview();
             });
@@ -359,6 +396,7 @@
                 else { selected.push(tag); chip.classList.add("active"); }
                 if (!task.colValues) task.colValues = {};
                 task.colValues[col.id] = selected.join(",");
+                sst().forceSave();
                 saveState();
                 renderSlidePreview();
               });
@@ -374,6 +412,7 @@
             input.addEventListener("input", () => {
               if (!task.colValues) task.colValues = {};
               task.colValues[col.id] = input.value;
+              sst().forceSave();
               saveState();
               renderSlidePreview();
             });
@@ -385,7 +424,8 @@
         delBtn.className = "ste-row-del";
         delBtn.textContent = "×";
         delBtn.addEventListener("click", () => {
-          slide.content._tasks = slide.content._tasks.filter(t => t.id !== task.id);
+          sst().deleteTask(task.id);
+          slide.content._taskIds = slide.content._taskIds.filter(id => id !== task.id);
           saveState();
           rebuildRows();
           renderSlidePreview();
@@ -1703,6 +1743,7 @@ Guidelines:
     populateTemplateSelect();
 
     checkChartImport();
+    migrateSlideTasksToShared();
 
     renderAll();
     setupContextMenu();
@@ -1782,6 +1823,10 @@ Guidelines:
       state.currentSlide = 0;
       saveState();
       renderAll();
+    });
+
+    window.addEventListener("datascope:taskchange", (e) => {
+      if (e.detail?.type === "external") renderSlidePreview();
     });
   }
 
