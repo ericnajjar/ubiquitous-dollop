@@ -449,6 +449,12 @@ select.tbe-col-input { padding: 4px 4px; }
   line-height: 1;
 }
 .tbe-row-del:hover { color: var(--danger); }
+.tbe-share-btn {
+  background: transparent; border: none; color: rgba(154,164,199,.45);
+  cursor: pointer; padding: 2px 4px; line-height: 1; border-radius: 4px;
+}
+.tbe-share-btn:hover { color: #34d399; background: rgba(52,211,153,.1); }
+.tbe-share-btn.active { color: #34d399; background: rgba(52,211,153,.12); }
 
 @media (max-width: 600px) {
   .canvas-toolbar { width: 44px; padding: 6px 3px; }

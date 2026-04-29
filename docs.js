@@ -422,8 +422,8 @@
 
     const linkTaskBtn = document.createElement("button");
     linkTaskBtn.className = "btn btn-ghost btn-sm";
-    linkTaskBtn.textContent = "Link";
-    linkTaskBtn.title = "Link existing task from other tools";
+    linkTaskBtn.textContent = "Library";
+    linkTaskBtn.title = "Link a shared task from the library";
     linkTaskBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       showTaskPicker(linkTaskBtn, block);
@@ -528,7 +528,10 @@
     if (!block) return;
 
     if (block.type === "tasks") {
-      (block.taskIds || []).forEach(id => st().deleteTask(id));
+      (block.taskIds || []).forEach(id => {
+        const t = st().getTask(id);
+        if (t && !t.shared) st().deleteTask(id);
+      });
     }
 
     doc.blocks = doc.blocks.filter(b => b.id !== blockId);
@@ -923,7 +926,7 @@
 
   function buildTaskRow(task, block) {
     const row = document.createElement("div");
-    row.className = "task-row";
+    row.className = "task-row" + (task.shared ? " task-shared" : "");
     row.draggable = true;
 
     const header = document.createElement("div");
@@ -964,6 +967,11 @@
     addChildBtn.title = "Add sub-task";
     addChildBtn.textContent = "+";
 
+    const shareBtn = document.createElement("button");
+    shareBtn.className = "task-action-btn share-btn" + (task.shared ? " active" : "");
+    shareBtn.title = task.shared ? "Shared to Library (click to unshare)" : "Share to Library";
+    shareBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M8 2v8M5 5l3-3 3 3M3 10v3h10v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+
     const addLocalColBtn = document.createElement("button");
     addLocalColBtn.className = "task-action-btn";
     addLocalColBtn.title = "Add local column (this task only)";
@@ -971,13 +979,14 @@
 
     const delBtn = document.createElement("button");
     delBtn.className = "task-action-btn danger";
-    delBtn.title = "Delete task";
+    delBtn.title = task.shared ? "Unlink from this block" : "Delete task";
     delBtn.textContent = "×";
 
     header.appendChild(grip);
     header.appendChild(toggle);
     header.appendChild(text);
     header.appendChild(chipWrap);
+    header.appendChild(shareBtn);
     header.appendChild(linkBtn);
     header.appendChild(addChildBtn);
     header.appendChild(addLocalColBtn);
@@ -1070,6 +1079,14 @@
       showCardPicker(linkBtn, (card) => { task.linkedCard = card; saveDocs(); renderTasks(); });
     });
 
+    shareBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (task.shared) st().unshareTask(task.id);
+      else st().shareTask(task.id);
+      saveDocs();
+      renderTasks();
+    });
+
     addLocalColBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       showAddColumnPopup(addLocalColBtn, "local", task.id);
@@ -1087,10 +1104,10 @@
     });
 
     delBtn.addEventListener("click", () => {
-      st().deleteTask(task.id);
       if (block && block.taskIds) {
         block.taskIds = block.taskIds.filter(id => id !== task.id);
       }
+      if (!task.shared) st().deleteTask(task.id);
       saveDocs();
       renderTasks();
     });

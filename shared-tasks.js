@@ -1,4 +1,4 @@
-// DataScope Shared Tasks — central task store used by Docs, Canvas, and Slides.
+// DataScope Task Library — central task store with opt-in sharing across tools.
 (() => {
   const STORE_KEY = "datascope_shared_tasks";
 
@@ -51,6 +51,7 @@
     const task = {
       id: uid(),
       text: "",
+      shared: false,
       colValues: {},
       children: [],
       localColumns: [],
@@ -89,6 +90,28 @@
     const rest = store.tasks.filter(t => !ids.includes(t.id));
     store.tasks = [...ordered, ...rest];
     save(store);
+  }
+
+  function shareTask(id) {
+    const task = getTask(id);
+    if (!task) return null;
+    task.shared = true;
+    save(store);
+    notify("share", id);
+    return task;
+  }
+
+  function unshareTask(id) {
+    const task = getTask(id);
+    if (!task) return null;
+    task.shared = false;
+    save(store);
+    notify("unshare", id);
+    return task;
+  }
+
+  function getSharedTasks() {
+    return store.tasks.filter(t => t.shared);
   }
 
   function getColumns() {
@@ -154,7 +177,7 @@
     const search = document.createElement("input");
     search.type = "text";
     search.className = "stp-search";
-    search.placeholder = "Search tasks…";
+    search.placeholder = "Search shared tasks…";
     picker.appendChild(search);
 
     const list = document.createElement("div");
@@ -165,13 +188,14 @@
       list.innerHTML = "";
       const excluded = new Set(excludeIds);
       const available = store.tasks.filter(t =>
+        t.shared &&
         !excluded.has(t.id) &&
         (!filter || (t.text || "").toLowerCase().includes(filter.toLowerCase()))
       );
       if (!available.length) {
         const empty = document.createElement("div");
         empty.className = "stp-empty";
-        empty.textContent = filter ? "No matching tasks" : "No available tasks";
+        empty.textContent = filter ? "No matching tasks" : "No shared tasks yet. Use the share button on any task to add it to the library.";
         list.appendChild(empty);
         return;
       }
@@ -259,6 +283,9 @@
     getTask,
     getTasks,
     getAllTasks,
+    getSharedTasks,
+    shareTask,
+    unshareTask,
     createTask,
     updateTask,
     deleteTask,

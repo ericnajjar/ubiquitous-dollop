@@ -1334,6 +1334,10 @@ mark[data-comment-id] {
   vertical-align: middle;
 }
 .stask-text { font-weight: 500; }
+.stask-shared-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: #34d399; margin-right: 6px; vertical-align: middle;
+}
 .stask-empty {
   text-align: center;
   opacity: 0.4;
@@ -1477,3 +1481,9 @@ select.ste-col-input { padding: 4px 4px; }
   background: transparent; border: none; color: var(--muted); font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1;
 }
 .ste-row-del:hover { color: var(--danger); }
+.ste-share-btn {
+  background: transparent; border: none; color: rgba(154,164,199,.45);
+  cursor: pointer; padding: 2px 4px; line-height: 1; border-radius: 4px;
+}
+.ste-share-btn:hover { color: #34d399; background: rgba(52,211,153,.1); }
+.ste-share-btn.active { color: #34d399; background: rgba(52,211,153,.12); }

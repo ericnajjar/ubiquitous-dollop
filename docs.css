@@ -356,7 +356,9 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface);
   transition: border-color .2s;
 }
+.task-row.task-shared { border-color: rgba(52,211,153,.2); }
 .task-row:hover { border-color: rgba(255,255,255,.12); }
+.task-row.task-shared:hover { border-color: rgba(52,211,153,.35); }
 
 .task-row-header {
   display: flex; align-items: center; gap: 6px;
@@ -407,6 +409,9 @@ a { color: inherit; text-decoration: none; }
 .task-action-btn.small { width: 20px; height: 20px; font-size: 14px; }
 .task-action-btn.link-btn { color: rgba(154,164,199,.45); }
 .task-action-btn.link-btn:hover { color: var(--accent); background: rgba(110,168,255,.1); }
+.task-action-btn.share-btn { color: rgba(154,164,199,.45); }
+.task-action-btn.share-btn:hover { color: #34d399; background: rgba(52,211,153,.1); }
+.task-action-btn.share-btn.active { color: #34d399; background: rgba(52,211,153,.12); }
 
 .task-chip-wrap { display: flex; align-items: center; min-width: 0; }
 .task-card-chip {

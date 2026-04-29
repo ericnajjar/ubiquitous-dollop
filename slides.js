@@ -201,8 +201,9 @@
           cells += `<td class="stask-td">${esc(val || "—")}</td>`;
         }
       });
+      const sharedDot = task.shared ? `<span class="stask-shared-dot" title="Shared"></span>` : "";
       rows += `<tr class="stask-row" data-task-idx="${i}">
-        <td class="stask-td stask-text">${esc(task.text || "(empty)")}</td>
+        <td class="stask-td stask-text">${sharedDot}${esc(task.text || "(empty)")}</td>
         ${cells}
       </tr>`;
     });
@@ -289,8 +290,8 @@
 
     const linkBtn = document.createElement("button");
     linkBtn.className = "ste-btn";
-    linkBtn.textContent = "Link";
-    linkBtn.title = "Link existing task";
+    linkBtn.textContent = "Library";
+    linkBtn.title = "Link a shared task from the library";
     linkBtn.addEventListener("click", () => {
       sst().buildTaskPicker({
         excludeIds: slide.content._taskIds,
@@ -420,12 +421,26 @@
           }
         });
 
+        const shareBtn = document.createElement("button");
+        shareBtn.className = "ste-share-btn" + (task.shared ? " active" : "");
+        shareBtn.title = task.shared ? "Shared (click to unshare)" : "Share to Library";
+        shareBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M8 2v8M5 5l3-3 3 3M3 10v3h10v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+        shareBtn.addEventListener("click", () => {
+          if (task.shared) sst().unshareTask(task.id);
+          else sst().shareTask(task.id);
+          saveState();
+          rebuildRows();
+          renderSlidePreview();
+        });
+        row.appendChild(shareBtn);
+
         const delBtn = document.createElement("button");
         delBtn.className = "ste-row-del";
         delBtn.textContent = "×";
+        delBtn.title = task.shared ? "Unlink" : "Delete";
         delBtn.addEventListener("click", () => {
-          sst().deleteTask(task.id);
           slide.content._taskIds = slide.content._taskIds.filter(id => id !== task.id);
+          if (!task.shared) sst().deleteTask(task.id);
           saveState();
           rebuildRows();
           renderSlidePreview();

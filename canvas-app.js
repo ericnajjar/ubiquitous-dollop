@@ -679,13 +679,22 @@
       ctx.font = "12px Inter, system-ui, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
-      const textW = taskColW - 8;
+      let labelX = s.x + pad;
+      if (task.shared) {
+        ctx.fillStyle = "#34d399";
+        ctx.beginPath();
+        ctx.arc(labelX + 4, ry + rowH / 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+        labelX += 12;
+        ctx.fillStyle = "#c8d0e7";
+      }
+      const textW = taskColW - 8 - (task.shared ? 12 : 0);
       let label = task.text || "(empty)";
       if (ctx.measureText(label).width > textW) {
         while (label.length > 1 && ctx.measureText(label + "…").width > textW) label = label.slice(0, -1);
         label += "…";
       }
-      ctx.fillText(label, s.x + pad, ry + rowH / 2);
+      ctx.fillText(label, labelX, ry + rowH / 2);
 
       let cx = s.x + pad + taskColW;
       cols.forEach(col => {
@@ -1914,8 +1923,8 @@
 
     const linkBtn = document.createElement("button");
     linkBtn.className = "tbe-btn";
-    linkBtn.textContent = "Link";
-    linkBtn.title = "Link existing task";
+    linkBtn.textContent = "Library";
+    linkBtn.title = "Link a shared task from the library";
     linkBtn.addEventListener("click", () => {
       cst().buildTaskPicker({
         excludeIds: shape.taskIds,
@@ -2041,12 +2050,25 @@
           }
         });
 
+        const shareBtn = document.createElement("button");
+        shareBtn.className = "tbe-share-btn" + (task.shared ? " active" : "");
+        shareBtn.title = task.shared ? "Shared (click to unshare)" : "Share to Library";
+        shareBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="11" height="11"><path d="M8 2v8M5 5l3-3 3 3M3 10v3h10v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+        shareBtn.addEventListener("click", () => {
+          if (task.shared) cst().unshareTask(task.id);
+          else cst().shareTask(task.id);
+          save(); draw();
+          rebuildRows();
+        });
+        row.appendChild(shareBtn);
+
         const delBtn = document.createElement("button");
         delBtn.className = "tbe-row-del";
         delBtn.textContent = "×";
+        delBtn.title = task.shared ? "Unlink" : "Delete";
         delBtn.addEventListener("click", () => {
-          cst().deleteTask(task.id);
           shape.taskIds = shape.taskIds.filter(id => id !== task.id);
+          if (!task.shared) cst().deleteTask(task.id);
           autoSizeTaskBlock(shape);
           save(); draw();
           rebuildRows();
