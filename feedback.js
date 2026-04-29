@@ -45,14 +45,15 @@
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
 
-  function buildFAB() {
+  function buildNavButton() {
+    const nav = document.querySelector(".site-nav");
+    if (!nav) return;
     const btn = document.createElement("button");
-    btn.className = "feedback-fab";
+    btn.className = "feedback-nav-btn";
     btn.setAttribute("aria-label", "Send feedback");
-    btn.title = "Send feedback";
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`;
+    btn.textContent = "Feedback";
     btn.addEventListener("click", openModal);
-    document.body.appendChild(btn);
+    nav.appendChild(btn);
   }
 
   function openModal() {
@@ -289,7 +290,7 @@
 
   function init() {
     if (location.pathname.endsWith("auth.html")) return;
-    buildFAB();
+    buildNavButton();
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
