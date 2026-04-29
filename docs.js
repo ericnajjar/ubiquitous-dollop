@@ -378,72 +378,97 @@
     wrap.dataset.blockId = block.id;
 
     const tasks = st().getTasks(block.taskIds || []);
-
-    const header = document.createElement("div");
-    header.className = "tasks-header";
-
-    const label = document.createElement("span");
-    label.className = "tasks-label";
-    label.textContent = "Tasks";
-    header.appendChild(label);
-
-    const colChips = document.createElement("div");
-    colChips.className = "tasks-col-chips";
-    st().getColumns().forEach(col => {
-      const chip = document.createElement("span");
-      chip.className = "tasks-col-chip";
-      const name = document.createElement("span");
-      name.textContent = col.name;
-      const del = document.createElement("button");
-      del.className = "tasks-col-chip-del";
-      del.textContent = "x";
-      del.title = "Remove global column";
-      del.addEventListener("click", (e) => { e.stopPropagation(); deleteGlobalColumn(col.id); });
-      chip.appendChild(name);
-      chip.appendChild(del);
-      colChips.appendChild(chip);
+    const globalCols = st().getColumns();
+    const localColMap = new Map();
+    tasks.forEach(task => {
+      (task.localColumns || []).forEach(col => {
+        if (!localColMap.has(col.id)) localColMap.set(col.id, col);
+      });
     });
-    header.appendChild(colChips);
+    const allCols = [...globalCols, ...localColMap.values()];
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "tt-toolbar";
+    const tbLabel = document.createElement("span");
+    tbLabel.className = "tt-toolbar-label";
+    tbLabel.textContent = "Tasks";
+    toolbar.appendChild(tbLabel);
 
     const addColBtn = document.createElement("button");
     addColBtn.className = "btn btn-ghost btn-sm";
     addColBtn.textContent = "+ Column";
-    addColBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showAddColumnPopup(addColBtn, "global", null);
-    });
-    header.appendChild(addColBtn);
+    addColBtn.addEventListener("click", (e) => { e.stopPropagation(); showAddColumnPopup(addColBtn, "global", null); });
+    toolbar.appendChild(addColBtn);
 
     const addTaskBtn = document.createElement("button");
     addTaskBtn.className = "btn btn-ghost btn-sm";
-    addTaskBtn.textContent = "+ Task";
+    addTaskBtn.textContent = "+ Row";
     addTaskBtn.addEventListener("click", () => addTaskToBlock(block.id));
-    header.appendChild(addTaskBtn);
+    toolbar.appendChild(addTaskBtn);
 
     const linkTaskBtn = document.createElement("button");
     linkTaskBtn.className = "btn btn-ghost btn-sm";
     linkTaskBtn.textContent = "Library";
     linkTaskBtn.title = "Link a shared task from the library";
-    linkTaskBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showTaskPicker(linkTaskBtn, block);
-    });
-    header.appendChild(linkTaskBtn);
+    linkTaskBtn.addEventListener("click", (e) => { e.stopPropagation(); showTaskPicker(linkTaskBtn, block); });
+    toolbar.appendChild(linkTaskBtn);
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "btn btn-ghost btn-sm danger";
     removeBtn.textContent = "×";
     removeBtn.title = "Remove task block";
     removeBtn.addEventListener("click", () => removeBlock(block.id));
-    header.appendChild(removeBtn);
+    toolbar.appendChild(removeBtn);
 
-    wrap.appendChild(header);
+    wrap.appendChild(toolbar);
 
-    const list = document.createElement("div");
-    list.className = "tasks-list";
-    tasks.forEach(task => list.appendChild(buildTaskRow(task, block)));
-    wrap.appendChild(list);
+    const tableWrap = document.createElement("div");
+    tableWrap.className = "tt-wrap";
+    const table = document.createElement("table");
+    table.className = "task-table";
 
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+
+    const thDrag = document.createElement("th");
+    thDrag.className = "tt-th tt-th-drag";
+    headRow.appendChild(thDrag);
+    const thName = document.createElement("th");
+    thName.className = "tt-th tt-th-name";
+    thName.textContent = "Task";
+    headRow.appendChild(thName);
+
+    allCols.forEach(col => {
+      const th = document.createElement("th");
+      th.className = "tt-th";
+      const nameEl = document.createElement("span");
+      nameEl.textContent = col.name;
+      th.appendChild(nameEl);
+      const isGlobal = globalCols.some(g => g.id === col.id);
+      const del = document.createElement("button");
+      del.className = "tt-th-del";
+      del.textContent = "×";
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (isGlobal) deleteGlobalColumn(col.id);
+        else tasks.forEach(t => { if ((t.localColumns || []).some(lc => lc.id === col.id)) deleteLocalColumn(t, col.id); });
+      });
+      th.appendChild(del);
+      headRow.appendChild(th);
+    });
+
+    const thAct = document.createElement("th");
+    thAct.className = "tt-th tt-th-actions";
+    headRow.appendChild(thAct);
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    tasks.forEach(task => appendTaskRows(task, block, allCols, tbody));
+    table.appendChild(tbody);
+
+    tableWrap.appendChild(table);
+    wrap.appendChild(tableWrap);
     return wrap;
   }
 
@@ -515,7 +540,7 @@
       }, 50);
     } else if (type === "tasks") {
       setTimeout(() => {
-        const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .task-text`);
+        const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .tt-name-input`);
         if (rows.length) rows[rows.length - 1].focus();
       }, 50);
     }
@@ -551,7 +576,7 @@
     saveDocs();
     renderBlocks(true);
     setTimeout(() => {
-      const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${blockId}"] .task-text`);
+      const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${blockId}"] .tt-name-input`);
       if (rows.length) rows[rows.length - 1].focus();
     }, 50);
   }
@@ -632,48 +657,28 @@
   let dragSrcChildInfo = null;
 
   function clearDropIndicators() {
-    document.querySelectorAll(".task-row.drop-above, .task-row.drop-below")
+    document.querySelectorAll(".tt-row.drop-above, .tt-row.drop-below")
       .forEach((el) => el.classList.remove("drop-above", "drop-below"));
   }
 
   function clearChildDropIndicators() {
-    document.querySelectorAll(".task-child-row.drop-above, .task-child-row.drop-below")
+    document.querySelectorAll(".tt-child-row.drop-above, .tt-child-row.drop-below")
       .forEach((el) => el.classList.remove("drop-above", "drop-below"));
   }
 
-  function buildColField(item, col, onDelete) {
-    const field = document.createElement("div");
-    field.className = "task-col-field";
-    const labelRow = document.createElement("div");
-    labelRow.className = "task-col-label-row";
-    const label = document.createElement("span");
-    label.className = "task-col-label";
-    label.textContent = col.name;
-    labelRow.appendChild(label);
-    if (onDelete) {
-      const del = document.createElement("button");
-      del.className = "task-col-del";
-      del.textContent = "×";
-      del.title = "Remove column";
-      del.addEventListener("click", (e) => { e.stopPropagation(); onDelete(); });
-      labelRow.appendChild(del);
-    }
-    field.appendChild(labelRow);
-
+  function buildCellEditor(item, col) {
     const colType = col.type || "text";
     const currentVal = (item.colValues || {})[col.id] || "";
 
     if (colType === "dropdown") {
       const sel = document.createElement("select");
-      sel.className = "task-col-select";
+      sel.className = "tt-select";
       const emptyOpt = document.createElement("option");
-      emptyOpt.value = "";
-      emptyOpt.textContent = "—";
+      emptyOpt.value = ""; emptyOpt.textContent = "—";
       sel.appendChild(emptyOpt);
       (col.options || []).forEach(opt => {
         const o = document.createElement("option");
-        o.value = opt;
-        o.textContent = opt;
+        o.value = opt; o.textContent = opt;
         if (opt === currentVal) o.selected = true;
         sel.appendChild(o);
       });
@@ -682,15 +687,14 @@
         item.colValues[col.id] = sel.value;
         saveDocs();
       });
-      field.appendChild(sel);
+      return sel;
     } else if (colType === "tags") {
-      const tagsWrap = document.createElement("div");
-      tagsWrap.className = "task-col-tags";
+      const wrap = document.createElement("div");
+      wrap.className = "tt-tags";
       const selected = currentVal ? currentVal.split(",").filter(Boolean) : [];
       (col.options || []).forEach((tag, ti) => {
         const chip = document.createElement("button");
-        chip.className = "task-tag-chip";
-        if (selected.includes(tag)) chip.classList.add("active");
+        chip.className = "tt-tag" + (selected.includes(tag) ? " active" : "");
         chip.style.setProperty("--tag-hue", (ti * 47 + 200) % 360);
         chip.textContent = tag;
         chip.addEventListener("click", (e) => {
@@ -702,13 +706,13 @@
           item.colValues[col.id] = selected.join(",");
           saveDocs();
         });
-        tagsWrap.appendChild(chip);
+        wrap.appendChild(chip);
       });
-      field.appendChild(tagsWrap);
+      return wrap;
     } else {
       const input = document.createElement("input");
       input.type = "text";
-      input.className = "task-col-input";
+      input.className = "tt-input";
       input.value = currentVal;
       input.placeholder = "—";
       input.addEventListener("input", () => {
@@ -716,10 +720,8 @@
         item.colValues[col.id] = input.value;
         saveDocs();
       });
-      field.appendChild(input);
+      return input;
     }
-
-    return field;
   }
 
   function deleteGlobalColumn(colId) {
@@ -924,317 +926,251 @@
     });
   }
 
-  function buildTaskRow(task, block) {
-    const row = document.createElement("div");
-    row.className = "task-row" + (task.shared ? " task-shared" : "");
-    row.draggable = true;
+  function appendTaskRows(task, block, allCols, tbody) {
+    const tr = document.createElement("tr");
+    tr.className = "tt-row" + (task.shared ? " tt-shared" : "");
+    tr.draggable = true;
 
-    const header = document.createElement("div");
-    header.className = "task-row-header";
+    const tdDrag = document.createElement("td");
+    tdDrag.className = "tt-cell tt-cell-drag";
+    tdDrag.textContent = "⠿";
+    tr.appendChild(tdDrag);
 
-    const grip = document.createElement("div");
-    grip.className = "task-grip";
-    grip.textContent = "⠿";
-    grip.title = "Drag to reorder";
-
+    const tdName = document.createElement("td");
+    tdName.className = "tt-cell tt-cell-name";
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "tt-name-wrap";
+    const hasChildren = task.children && task.children.length > 0;
     const toggle = document.createElement("button");
-    toggle.className = "task-toggle" + (task.expanded ? " open" : "");
+    toggle.className = "tt-toggle" + (task.expanded ? " open" : "") + (!hasChildren ? " empty" : "");
     toggle.textContent = "▸";
-    toggle.title = task.expanded ? "Collapse" : "Expand";
-    if (!task.children || !task.children.length) toggle.classList.add("empty");
-
-    const text = document.createElement("input");
-    text.type = "text";
-    text.className = "task-text";
-    text.value = task.text || "";
-    text.placeholder = "Task description…";
-
-    const chipWrap = document.createElement("div");
-    chipWrap.className = "task-chip-wrap";
+    nameWrap.appendChild(toggle);
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "tt-name-input";
+    nameInput.value = task.text || "";
+    nameInput.placeholder = "Task description…";
+    nameWrap.appendChild(nameInput);
     if (task.linkedCard) {
-      chipWrap.appendChild(buildCardChip(task.linkedCard, () => {
-        task.linkedCard = null; saveDocs(); renderTasks();
-      }));
+      const badge = document.createElement("span");
+      badge.className = "tt-linked-badge";
+      badge.textContent = task.linkedCard.title;
+      badge.title = "Linked: " + task.linkedCard.title;
+      badge.addEventListener("click", (e) => { e.stopPropagation(); showCardDetail(task.linkedCard, badge); });
+      nameWrap.appendChild(badge);
     }
+    tdName.appendChild(nameWrap);
+    tr.appendChild(tdName);
 
-    const linkBtn = document.createElement("button");
-    linkBtn.className = "task-action-btn link-btn";
-    linkBtn.title = "Link a board card";
-    linkBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="13" height="13"><path d="M6.5 10.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1M9.5 5.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M6 8.5l4-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+    allCols.forEach(col => {
+      const td = document.createElement("td");
+      td.className = "tt-cell";
+      td.appendChild(buildCellEditor(task, col));
+      tr.appendChild(td);
+    });
 
-    const addChildBtn = document.createElement("button");
-    addChildBtn.className = "task-action-btn";
-    addChildBtn.title = "Add sub-task";
-    addChildBtn.textContent = "+";
-
+    const tdAct = document.createElement("td");
+    tdAct.className = "tt-cell tt-cell-actions";
+    const actWrap = document.createElement("div");
+    actWrap.className = "tt-actions";
     const shareBtn = document.createElement("button");
-    shareBtn.className = "task-action-btn share-btn" + (task.shared ? " active" : "");
-    shareBtn.title = task.shared ? "Shared to Library (click to unshare)" : "Share to Library";
-    shareBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M8 2v8M5 5l3-3 3 3M3 10v3h10v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
-
-    const addLocalColBtn = document.createElement("button");
-    addLocalColBtn.className = "task-action-btn";
-    addLocalColBtn.title = "Add local column (this task only)";
-    addLocalColBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><rect x="1" y="2" width="4" height="12" rx="1" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M9 8h4M11 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
-
+    shareBtn.className = "tt-act-btn" + (task.shared ? " tt-shared-active" : "");
+    shareBtn.title = task.shared ? "Unshare" : "Share";
+    shareBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M8 2v8M5 5l3-3 3 3M3 10v3h10v-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const linkBtn = document.createElement("button");
+    linkBtn.className = "tt-act-btn";
+    linkBtn.title = "Link card";
+    linkBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M6.5 10.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1M9.5 5.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M6 8.5l4-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+    const addChildBtn = document.createElement("button");
+    addChildBtn.className = "tt-act-btn";
+    addChildBtn.title = "Add sub-row";
+    addChildBtn.textContent = "+";
     const delBtn = document.createElement("button");
-    delBtn.className = "task-action-btn danger";
-    delBtn.title = task.shared ? "Unlink from this block" : "Delete task";
+    delBtn.className = "tt-act-btn tt-act-del";
+    delBtn.title = task.shared ? "Unlink" : "Delete";
     delBtn.textContent = "×";
+    actWrap.appendChild(shareBtn);
+    actWrap.appendChild(linkBtn);
+    actWrap.appendChild(addChildBtn);
+    actWrap.appendChild(delBtn);
+    tdAct.appendChild(actWrap);
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
 
-    header.appendChild(grip);
-    header.appendChild(toggle);
-    header.appendChild(text);
-    header.appendChild(chipWrap);
-    header.appendChild(shareBtn);
-    header.appendChild(linkBtn);
-    header.appendChild(addChildBtn);
-    header.appendChild(addLocalColBtn);
-    header.appendChild(delBtn);
-    row.appendChild(header);
-
-    // Column value fields
-    const globalCols = st().getColumns();
-    const localCols = task.localColumns || [];
-    if (globalCols.length || localCols.length) {
-      const colValues = document.createElement("div");
-      colValues.className = "task-col-values";
-      globalCols.forEach((col) => colValues.appendChild(buildColField(task, col, null)));
-      localCols.forEach((col) => colValues.appendChild(buildColField(task, col, () => deleteLocalColumn(task, col.id))));
-      row.appendChild(colValues);
-    }
-
-    const children = document.createElement("div");
-    children.className = "task-children";
-    if (!task.expanded) children.hidden = true;
-
-    if (task.children) {
-      task.children.forEach((child) => {
-        children.appendChild(buildChildRow(task, child));
-      });
-    }
-    row.appendChild(children);
-
-    // Drag events
-    row.addEventListener("dragstart", (e) => {
+    tr.addEventListener("dragstart", (e) => {
       dragSrcTaskId = task.id;
       e.dataTransfer.effectAllowed = "move";
-      setTimeout(() => row.classList.add("dragging"), 0);
+      setTimeout(() => tr.classList.add("dragging"), 0);
     });
-    row.addEventListener("dragend", () => {
-      dragSrcTaskId = null;
-      row.classList.remove("dragging");
-      clearDropIndicators();
-    });
-    row.addEventListener("dragover", (e) => {
+    tr.addEventListener("dragend", () => { dragSrcTaskId = null; tr.classList.remove("dragging"); clearDropIndicators(); });
+    tr.addEventListener("dragover", (e) => {
       if (!dragSrcTaskId || dragSrcTaskId === task.id) return;
-      e.preventDefault();
-      clearDropIndicators();
-      const rect = row.getBoundingClientRect();
-      row.classList.add(e.clientY < rect.top + rect.height / 2 ? "drop-above" : "drop-below");
+      e.preventDefault(); clearDropIndicators();
+      const rect = tr.getBoundingClientRect();
+      tr.classList.add(e.clientY < rect.top + rect.height / 2 ? "drop-above" : "drop-below");
     });
-    row.addEventListener("dragleave", (e) => {
-      if (!row.contains(e.relatedTarget)) clearDropIndicators();
-    });
-    row.addEventListener("drop", (e) => {
+    tr.addEventListener("dragleave", (e) => { if (!tr.contains(e.relatedTarget)) tr.classList.remove("drop-above", "drop-below"); });
+    tr.addEventListener("drop", (e) => {
       e.preventDefault();
-      if (!dragSrcTaskId || dragSrcTaskId === task.id) return;
-      if (!block || !block.taskIds) return;
-      const insertAfter = e.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      if (!dragSrcTaskId || dragSrcTaskId === task.id || !block?.taskIds) return;
+      const after = e.clientY >= tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
       block.taskIds = block.taskIds.filter(id => id !== dragSrcTaskId);
-      const dstBlockIdx = block.taskIds.indexOf(task.id);
-      block.taskIds.splice(insertAfter ? dstBlockIdx + 1 : dstBlockIdx, 0, dragSrcTaskId);
-      clearDropIndicators();
-      saveDocs();
-      renderTasks();
+      const idx = block.taskIds.indexOf(task.id);
+      block.taskIds.splice(after ? idx + 1 : idx, 0, dragSrcTaskId);
+      clearDropIndicators(); saveDocs(); renderTasks();
     });
 
-    toggle.addEventListener("click", () => {
-      task.expanded = !task.expanded;
-      toggle.classList.toggle("open", task.expanded);
-      toggle.title = task.expanded ? "Collapse" : "Expand";
-      children.hidden = !task.expanded;
-      saveDocs();
-    });
-
-    text.addEventListener("input", () => { task.text = text.value; st().forceSave(); saveDocs(); });
-    text.addEventListener("keydown", (e) => {
+    toggle.addEventListener("click", () => { task.expanded = !task.expanded; saveDocs(); renderTasks(); });
+    nameInput.addEventListener("input", () => { task.text = nameInput.value; st().forceSave(); saveDocs(); });
+    nameInput.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      if (!block || !block.taskIds) return;
+      if (!block?.taskIds) return;
       const newTask = st().createTask({ text: "" });
-      const blockIdx = block.taskIds.indexOf(task.id);
-      block.taskIds.splice(blockIdx + 1, 0, newTask.id);
-      saveDocs();
-      renderTasks();
-      if (block) {
-        const inputs = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .task-text`);
-        const localIdx = block.taskIds ? block.taskIds.indexOf(newTask.id) : -1;
-        if (localIdx >= 0 && inputs[localIdx]) inputs[localIdx].focus();
-      }
-    });
-
-    linkBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      showCardPicker(linkBtn, (card) => { task.linkedCard = card; saveDocs(); renderTasks(); });
+      const bIdx = block.taskIds.indexOf(task.id);
+      block.taskIds.splice(bIdx + 1, 0, newTask.id);
+      saveDocs(); renderTasks();
+      setTimeout(() => {
+        const inputs = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .tt-name-input`);
+        const li = block.taskIds.indexOf(newTask.id);
+        if (li >= 0 && inputs[li]) inputs[li].focus();
+      }, 50);
     });
 
     shareBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (task.shared) st().unshareTask(task.id);
-      else st().shareTask(task.id);
-      saveDocs();
-      renderTasks();
+      if (task.shared) st().unshareTask(task.id); else st().shareTask(task.id);
+      saveDocs(); renderTasks();
     });
-
-    addLocalColBtn.addEventListener("click", (e) => {
+    linkBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      showAddColumnPopup(addLocalColBtn, "local", task.id);
+      showCardPicker(linkBtn, (card) => { task.linkedCard = card; saveDocs(); renderTasks(); });
     });
-
     addChildBtn.addEventListener("click", () => {
       if (!task.children) task.children = [];
       task.children.push({ id: uid(), text: "", linkedCard: null, colValues: {} });
       task.expanded = true;
-      saveDocs();
-      renderTasks();
-      const scope = block ? `.doc-task-block[data-block-id="${block.id}"]` : ".doc-task-block";
-      const allRows = document.querySelectorAll(`${scope} .task-child-text`);
-      if (allRows.length) allRows[allRows.length - 1].focus();
+      saveDocs(); renderTasks();
+      setTimeout(() => {
+        const inputs = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .tt-child-name`);
+        if (inputs.length) inputs[inputs.length - 1].focus();
+      }, 50);
     });
-
     delBtn.addEventListener("click", () => {
-      if (block && block.taskIds) {
-        block.taskIds = block.taskIds.filter(id => id !== task.id);
-      }
+      if (block?.taskIds) block.taskIds = block.taskIds.filter(id => id !== task.id);
       if (!task.shared) st().deleteTask(task.id);
-      saveDocs();
-      renderTasks();
+      saveDocs(); renderTasks();
     });
 
-    return row;
+    if (task.expanded && task.children) {
+      task.children.forEach(child => appendChildRow(task, child, block, allCols, tbody));
+    }
   }
 
-  function buildChildRow(parent, child) {
-    const wrap = document.createElement("div");
-    wrap.className = "task-child-wrap";
+  function appendChildRow(parent, child, block, allCols, tbody) {
+    const tr = document.createElement("tr");
+    tr.className = "tt-row tt-child-row";
+    tr.draggable = true;
 
-    const row = document.createElement("div");
-    row.className = "task-child-row";
-    row.draggable = true;
+    const tdDrag = document.createElement("td");
+    tdDrag.className = "tt-cell tt-cell-drag";
+    tdDrag.textContent = "⠿";
+    tr.appendChild(tdDrag);
 
-    const grip = document.createElement("div");
-    grip.className = "task-grip small";
-    grip.textContent = "⠿";
-
-    const text = document.createElement("input");
-    text.type = "text";
-    text.className = "task-child-text";
-    text.value = child.text || "";
-    text.placeholder = "Sub-task…";
-
-    const chipWrap = document.createElement("div");
-    chipWrap.className = "task-chip-wrap";
+    const tdName = document.createElement("td");
+    tdName.className = "tt-cell tt-cell-name";
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "tt-name-wrap tt-child-indent";
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.className = "tt-child-name";
+    nameInput.value = child.text || "";
+    nameInput.placeholder = "Sub-task…";
+    nameWrap.appendChild(nameInput);
     if (child.linkedCard) {
-      chipWrap.appendChild(buildCardChip(child.linkedCard, () => {
-        child.linkedCard = null; saveDocs(); renderTasks();
-      }));
+      const badge = document.createElement("span");
+      badge.className = "tt-linked-badge";
+      badge.textContent = child.linkedCard.title;
+      nameWrap.appendChild(badge);
     }
+    tdName.appendChild(nameWrap);
+    tr.appendChild(tdName);
 
+    allCols.forEach(col => {
+      const td = document.createElement("td");
+      td.className = "tt-cell";
+      td.appendChild(buildCellEditor(child, col));
+      tr.appendChild(td);
+    });
+
+    const tdAct = document.createElement("td");
+    tdAct.className = "tt-cell tt-cell-actions";
+    const actWrap = document.createElement("div");
+    actWrap.className = "tt-actions";
     const linkBtn = document.createElement("button");
-    linkBtn.className = "task-action-btn link-btn small";
-    linkBtn.title = "Link a board card";
-    linkBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M6.5 10.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1M9.5 5.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M6 8.5l4-5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>`;
-
+    linkBtn.className = "tt-act-btn";
+    linkBtn.title = "Link card";
+    linkBtn.innerHTML = `<svg viewBox="0 0 16 16" fill="none" width="12" height="12"><path d="M6.5 10.5l-1 1a2.5 2.5 0 01-3.5-3.5l1-1M9.5 5.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M6 8.5l4-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
     const delBtn = document.createElement("button");
-    delBtn.className = "task-action-btn danger small";
+    delBtn.className = "tt-act-btn tt-act-del";
     delBtn.title = "Delete sub-task";
     delBtn.textContent = "×";
+    actWrap.appendChild(linkBtn);
+    actWrap.appendChild(delBtn);
+    tdAct.appendChild(actWrap);
+    tr.appendChild(tdAct);
+    tbody.appendChild(tr);
 
-    row.appendChild(grip);
-    row.appendChild(text);
-    row.appendChild(chipWrap);
-    row.appendChild(linkBtn);
-    row.appendChild(delBtn);
-    wrap.appendChild(row);
-
-    // Child drag events
-    row.addEventListener("dragstart", (e) => {
+    tr.addEventListener("dragstart", (e) => {
       e.stopPropagation();
       dragSrcChildInfo = { parentId: parent.id, childId: child.id };
       e.dataTransfer.effectAllowed = "move";
-      setTimeout(() => row.classList.add("dragging"), 0);
+      setTimeout(() => tr.classList.add("dragging"), 0);
     });
-    row.addEventListener("dragend", () => {
-      dragSrcChildInfo = null;
-      row.classList.remove("dragging");
-      clearChildDropIndicators();
-    });
-    row.addEventListener("dragover", (e) => {
+    tr.addEventListener("dragend", () => { dragSrcChildInfo = null; tr.classList.remove("dragging"); clearChildDropIndicators(); });
+    tr.addEventListener("dragover", (e) => {
       if (!dragSrcChildInfo || dragSrcChildInfo.parentId !== parent.id || dragSrcChildInfo.childId === child.id) return;
-      e.preventDefault();
-      e.stopPropagation();
-      clearChildDropIndicators();
-      const rect = row.getBoundingClientRect();
-      row.classList.add(e.clientY < rect.top + rect.height / 2 ? "drop-above" : "drop-below");
+      e.preventDefault(); e.stopPropagation(); clearChildDropIndicators();
+      const rect = tr.getBoundingClientRect();
+      tr.classList.add(e.clientY < rect.top + rect.height / 2 ? "drop-above" : "drop-below");
     });
-    row.addEventListener("dragleave", (e) => {
-      if (!row.contains(e.relatedTarget)) row.classList.remove("drop-above", "drop-below");
-    });
-    row.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    tr.addEventListener("dragleave", (e) => { if (!tr.contains(e.relatedTarget)) tr.classList.remove("drop-above", "drop-below"); });
+    tr.addEventListener("drop", (e) => {
+      e.preventDefault(); e.stopPropagation();
       if (!dragSrcChildInfo || dragSrcChildInfo.parentId !== parent.id || dragSrcChildInfo.childId === child.id) return;
-      const insertAfter = e.clientY >= row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
-      const srcIdx = parent.children.findIndex((c) => c.id === dragSrcChildInfo.childId);
+      const after = e.clientY >= tr.getBoundingClientRect().top + tr.getBoundingClientRect().height / 2;
+      const srcIdx = parent.children.findIndex(c => c.id === dragSrcChildInfo.childId);
       if (srcIdx === -1) return;
       const [moved] = parent.children.splice(srcIdx, 1);
-      const dstIdx = parent.children.findIndex((c) => c.id === child.id);
-      parent.children.splice(insertAfter ? dstIdx + 1 : dstIdx, 0, moved);
-      clearChildDropIndicators();
-      saveDocs();
-      renderTasks();
+      const dstIdx = parent.children.findIndex(c => c.id === child.id);
+      parent.children.splice(after ? dstIdx + 1 : dstIdx, 0, moved);
+      clearChildDropIndicators(); saveDocs(); renderTasks();
     });
 
-    text.addEventListener("input", () => { child.text = text.value; saveDocs(); });
-    text.addEventListener("keydown", (e) => {
+    nameInput.addEventListener("input", () => { child.text = nameInput.value; saveDocs(); });
+    nameInput.addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
       if (!parent.children) parent.children = [];
       const newChild = { id: uid(), text: "", linkedCard: null, colValues: {} };
-      const idx = parent.children.findIndex((c) => c.id === child.id);
+      const idx = parent.children.findIndex(c => c.id === child.id);
       parent.children.splice(idx + 1, 0, newChild);
-      saveDocs();
-      renderTasks();
-      const taskRow = wrap.closest(".task-row");
-      const inputs = taskRow ? taskRow.querySelectorAll(".task-child-text") : document.querySelectorAll(".task-child-text");
-      if (inputs[idx + 1]) inputs[idx + 1].focus();
+      saveDocs(); renderTasks();
+      setTimeout(() => {
+        const inputs = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .tt-child-name`);
+        if (inputs[idx + 1]) inputs[idx + 1].focus();
+      }, 50);
     });
 
     linkBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       showCardPicker(linkBtn, (card) => { child.linkedCard = card; saveDocs(); renderTasks(); });
     });
-
     delBtn.addEventListener("click", () => {
-      parent.children = parent.children.filter((c) => c.id !== child.id);
+      parent.children = parent.children.filter(c => c.id !== child.id);
       if (!parent.children.length) parent.expanded = false;
-      saveDocs();
-      renderTasks();
+      saveDocs(); renderTasks();
     });
-
-    // Column value fields (global + parent local)
-    const globalCols = st().getColumns();
-    const localCols = parent.localColumns || [];
-    if (globalCols.length || localCols.length) {
-      const colValues = document.createElement("div");
-      colValues.className = "task-col-values task-child-col-values";
-      globalCols.forEach((col) => colValues.appendChild(buildColField(child, col, null)));
-      localCols.forEach((col) => colValues.appendChild(buildColField(child, col, null)));
-      wrap.appendChild(colValues);
-    }
-
-    return wrap;
   }
 
   function buildCardChip(card, onUnlink) {
@@ -1391,7 +1327,7 @@
       saveDocs();
       renderBlocks(false);
       setTimeout(() => {
-        const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .task-text`);
+        const rows = document.querySelectorAll(`.doc-task-block[data-block-id="${block.id}"] .tt-name-input`);
         if (rows.length) rows[rows.length - 1].focus();
       }, 50);
     }
