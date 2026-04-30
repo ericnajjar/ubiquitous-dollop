@@ -79,47 +79,6 @@
       </div>
       <div class="tool-divider"></div>
       <div class="tool-group">
-        <div class="tool-field">
-          <label>Fill</label>
-          <input type="color" id="fillColor" value="#1d254a" />
-          <label class="tool-none-label"><input type="checkbox" id="fillNone" /> None</label>
-        </div>
-        <div class="tool-field">
-          <label>Stroke</label>
-          <input type="color" id="strokeColor" value="#6ea8ff" />
-          <label class="tool-none-label"><input type="checkbox" id="strokeNone" /> None</label>
-        </div>
-        <div class="tool-field">
-          <label>Text</label>
-          <input type="color" id="textColor" value="#e7ecff" />
-        </div>
-        <div class="tool-field">
-          <label>Width</label>
-          <input type="number" id="strokeWidth" value="1.5" min="0.5" max="20" step="0.5" />
-        </div>
-        <div class="tool-field tool-align-field">
-          <label>Align</label>
-          <div class="tool-align-group">
-            <button class="tool-align-btn" data-align="left" title="Align left">
-              <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2" y="3" width="8" height="1.5" rx=".5"/><rect x="2" y="7" width="12" height="1.5" rx=".5"/><rect x="2" y="11" width="6" height="1.5" rx=".5"/></svg>
-            </button>
-            <button class="tool-align-btn active" data-align="center" title="Align center">
-              <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="8" height="1.5" rx=".5"/><rect x="2" y="7" width="12" height="1.5" rx=".5"/><rect x="5" y="11" width="6" height="1.5" rx=".5"/></svg>
-            </button>
-            <button class="tool-align-btn" data-align="right" title="Align right">
-              <svg viewBox="0 0 16 16" fill="currentColor"><rect x="6" y="3" width="8" height="1.5" rx=".5"/><rect x="2" y="7" width="12" height="1.5" rx=".5"/><rect x="8" y="11" width="6" height="1.5" rx=".5"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="tool-divider"></div>
-      <div class="tool-group">
-        <button class="tool-btn" id="bringFwdBtn" title="Bring forward (])">
-          <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="7" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3" opacity="0.4"/><rect x="9" y="5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
-        </button>
-        <button class="tool-btn" id="sendBackBtn" title="Send backward ([)">
-          <svg viewBox="0 0 20 20" fill="none"><rect x="9" y="5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3" opacity="0.4"/><rect x="3" y="7" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
-        </button>
         <button class="tool-btn" id="deleteBtn" title="Delete (Del)">
           <svg viewBox="0 0 20 20" fill="none"><path d="M5 6 L15 6 L14 17 H6 Z" stroke="currentColor" stroke-width="1.3" fill="none"/><line x1="3" y1="6" x2="17" y2="6" stroke="currentColor" stroke-width="1.3"/><path d="M8 3 H12 V6 H8 Z" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>
         </button>
@@ -161,6 +120,58 @@
 
     <div class="canvas-viewport" id="viewport">
       <div class="canvas-bar" id="canvasBar"></div>
+      <div class="ctx-toolbar" id="ctxToolbar" hidden>
+        <div class="ctx-group">
+          <div class="ctx-field">
+            <label>Fill</label>
+            <div class="ctx-color-wrap">
+              <input type="color" id="fillColor" value="#1d254a" />
+              <label class="ctx-none-label"><input type="checkbox" id="fillNone" /> None</label>
+            </div>
+          </div>
+          <div class="ctx-field">
+            <label>Stroke</label>
+            <div class="ctx-color-wrap">
+              <input type="color" id="strokeColor" value="#6ea8ff" />
+              <label class="ctx-none-label"><input type="checkbox" id="strokeNone" /> None</label>
+            </div>
+          </div>
+          <div class="ctx-field">
+            <label>Text</label>
+            <input type="color" id="textColor" value="#e7ecff" />
+          </div>
+          <div class="ctx-field">
+            <label>Width</label>
+            <input type="number" id="strokeWidth" value="1.5" min="0.5" max="20" step="0.5" />
+          </div>
+        </div>
+        <span class="ctx-sep"></span>
+        <div class="ctx-group">
+          <div class="ctx-field">
+            <label>Align</label>
+            <div class="ctx-align-group">
+              <button class="ctx-align-btn" data-align="left" title="Align left">
+                <svg viewBox="0 0 16 16" fill="currentColor"><rect x="2" y="3" width="8" height="1.5" rx=".5"/><rect x="2" y="7" width="12" height="1.5" rx=".5"/><rect x="2" y="11" width="6" height="1.5" rx=".5"/></svg>
+              </button>
+              <button class="ctx-align-btn active" data-align="center" title="Align center">
+                <svg viewBox="0 0 16 16" fill="currentColor"><rect x="4" y="3" width="8" height="1.5" rx=".5"/><rect x="2" y="7" width="12" height="1.5" rx=".5"/><rect x="5" y="11" width="6" height="1.5" rx=".5"/></svg>
+              </button>
+              <button class="ctx-align-btn" data-align="right" title="Align right">
+                <svg viewBox="0 0 16 16" fill="currentColor"><rect x="6" y="3" width="8" height="1.5" rx=".5"/><rect x="2" y="7" width="12" height="1.5" rx=".5"/><rect x="8" y="11" width="6" height="1.5" rx=".5"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <span class="ctx-sep"></span>
+        <div class="ctx-group ctx-zorder">
+          <button class="ctx-btn" id="bringFwdBtn" title="Bring forward (])">
+            <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="7" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3" opacity="0.4"/><rect x="9" y="5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+          </button>
+          <button class="ctx-btn" id="sendBackBtn" title="Send backward ([)">
+            <svg viewBox="0 0 20 20" fill="none"><rect x="9" y="5" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3" opacity="0.4"/><rect x="3" y="7" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/></svg>
+          </button>
+        </div>
+      </div>
       <canvas id="canvas"></canvas>
       <textarea id="textEditor" class="text-editor" hidden></textarea>
       <div class="canvas-drop-overlay" id="dropOverlay" hidden>

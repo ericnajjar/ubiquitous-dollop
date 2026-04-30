@@ -545,6 +545,56 @@
     drawMarquee();
 
     ctx.restore();
+    updateCtxToolbar();
+  }
+
+  function updateCtxToolbar() {
+    const tb = document.getElementById("ctxToolbar");
+    if (!tb) return;
+    const hasSelection = state.selected.size > 0 || state.selectedArrows.size > 0;
+    tb.hidden = !hasSelection;
+    if (!hasSelection) return;
+
+    const fillColorInput = document.getElementById("fillColor");
+    const strokeColorInput = document.getElementById("strokeColor");
+    const textColorInput = document.getElementById("textColor");
+    const strokeWidthInput = document.getElementById("strokeWidth");
+    const fillNone = document.getElementById("fillNone");
+    const strokeNone = document.getElementById("strokeNone");
+
+    if (state.selected.size === 1) {
+      const sel = state.shapes.find(s => state.selected.has(s.id));
+      if (sel) {
+        const f = sel.fill || state.fillColor;
+        const isFillNone = !f || f === "transparent" || f === "none";
+        fillNone.checked = isFillNone;
+        fillColorInput.disabled = isFillNone;
+        if (!isFillNone) fillColorInput.value = f;
+
+        const sk = sel.stroke || state.strokeColor;
+        const isStrokeNone = !sk || sk === "transparent" || sk === "none";
+        strokeNone.checked = isStrokeNone;
+        strokeColorInput.disabled = isStrokeNone;
+        if (!isStrokeNone) strokeColorInput.value = sk;
+
+        strokeWidthInput.value = sel.strokeWidth || state.strokeWidth;
+        textColorInput.value = sel.textColor || state.textColor;
+
+        const align = sel.textAlign || "center";
+        document.querySelectorAll(".ctx-align-btn").forEach(b => {
+          b.classList.toggle("active", b.dataset.align === align);
+        });
+      }
+    } else if (state.selectedArrows.size === 1 && state.selected.size === 0) {
+      const aId = [...state.selectedArrows][0];
+      const a = state.arrows.find(ar => ar.id === aId);
+      if (a) {
+        strokeColorInput.value = a.color || state.strokeColor;
+        strokeNone.checked = false;
+        strokeColorInput.disabled = false;
+        textColorInput.value = a.labelColor || state.textColor;
+      }
+    }
   }
 
   function drawGrid() {
@@ -932,7 +982,7 @@
 
   function setTextAlign(align) {
     state.textAlign = align;
-    document.querySelectorAll(".tool-align-btn").forEach(b => {
+    document.querySelectorAll(".ctx-align-btn").forEach(b => {
       b.classList.toggle("active", b.dataset.align === align);
     });
     if (state.selected.size) {
@@ -2379,6 +2429,10 @@
         state.shapes.forEach((s) => { if (state.selected.has(s.id)) s.stroke = e.target.value; });
         save(); draw();
       }
+      if (state.selectedArrows.size) {
+        state.arrows.forEach((a) => { if (state.selectedArrows.has(a.id)) a.color = e.target.value; });
+        save(); draw();
+      }
     });
     document.getElementById("strokeWidth").addEventListener("input", (e) => {
       const val = Math.max(0.5, parseFloat(e.target.value) || 1.5);
@@ -2434,7 +2488,7 @@
     });
 
     // Text alignment buttons
-    document.querySelectorAll(".tool-align-btn").forEach(btn => {
+    document.querySelectorAll(".ctx-align-btn").forEach(btn => {
       btn.addEventListener("click", () => setTextAlign(btn.dataset.align));
     });
 
