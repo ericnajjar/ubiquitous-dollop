@@ -265,6 +265,42 @@
 }
 .acp-no-key a { color: #6ea8ff; font-weight: 600; }
 
+/* Toast notification */
+.acp-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: rgba(22, 29, 61, 0.95);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #e7ecff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  animation: acp-toast-in 0.3s ease-out;
+  white-space: nowrap;
+}
+.acp-toast.out {
+  animation: acp-toast-out 0.3s ease-in forwards;
+}
+.acp-toast-link {
+  color: #8b5cf6;
+  font-weight: 700;
+  margin-left: 6px;
+}
+.acp-toast-link:hover { text-decoration: underline; }
+@keyframes acp-toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes acp-toast-out {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to { opacity: 0; transform: translateX(-50%) translateY(10px); }
+}
+
 @media (max-width: 480px) {
   .agent-chat-panel {
     left: 12px;

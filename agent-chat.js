@@ -422,10 +422,40 @@ Guidelines:
     return res.json();
   }
 
-  // ---- Chat state ----
+  // ---- Toast (feedback after tool use) ----
+  function showToast(message, href) {
+    const existing = document.querySelector(".acp-toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.className = "acp-toast";
+    toast.innerHTML = message + (href ? ' <a class="acp-toast-link" href="' + href + '">View &rarr;</a>' : "");
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add("out");
+      toast.addEventListener("animationend", () => toast.remove());
+    }, 3000);
+  }
+
+  // ---- Chat state (persisted to sessionStorage) ----
   let panelOpen = false;
   let activeAgent = null;
   let chatHistories = {};
+
+  try {
+    const saved = sessionStorage.getItem("datascope_agent_chats");
+    if (saved) chatHistories = JSON.parse(saved);
+  } catch (_) {}
+
+  function saveChatState() {
+    try {
+      sessionStorage.setItem("datascope_agent_chats", JSON.stringify(chatHistories));
+      if (activeAgent) {
+        sessionStorage.setItem("datascope_agent_active", activeAgent.id);
+      } else {
+        sessionStorage.removeItem("datascope_agent_active");
+      }
+    } catch (_) {}
+  }
 
   function getChatHistory(agentId) {
     if (!chatHistories[agentId]) chatHistories[agentId] = [];
@@ -485,14 +515,18 @@ Guidelines:
   function togglePanel() {
     panelOpen = !panelOpen;
     document.getElementById("agentChatPanel").classList.toggle("open", panelOpen);
-    if (panelOpen && !activeAgent) showAgentList();
-    if (panelOpen && activeAgent) {
-      setTimeout(() => document.getElementById("acpInput").focus(), 200);
+    if (panelOpen) {
+      if (activeAgent) {
+        openChat(activeAgent);
+      } else {
+        showAgentList();
+      }
     }
   }
 
   function showAgentList() {
     activeAgent = null;
+    sessionStorage.removeItem("datascope_agent_active");
     const list = document.getElementById("acpList");
     const msgs = document.getElementById("acpMessages");
     const inputArea = document.getElementById("acpInputArea");
@@ -556,6 +590,7 @@ Guidelines:
 
   function openChat(agent) {
     activeAgent = agent;
+    saveChatState();
     const list = document.getElementById("acpList");
     const msgs = document.getElementById("acpMessages");
     const inputArea = document.getElementById("acpInputArea");
@@ -664,6 +699,7 @@ Guidelines:
 
     const history = getChatHistory(activeAgent.id);
     history.push({ role: "user", content: text });
+    saveChatState();
 
     input.disabled = true;
     sendBtn.disabled = true;
@@ -675,15 +711,27 @@ Guidelines:
       removeTyping();
       addBotMsg("Sorry, something went wrong: " + err.message);
     } finally {
+      saveChatState();
       input.disabled = false;
       sendBtn.disabled = false;
       setTimeout(() => input.focus(), 50);
     }
   }
 
+  const TOOL_PAGES = {
+    create_note: { label: "Note", href: "notes.html" },
+    read_notes: null,
+    create_board_cards: { label: "Board", href: "kanban.html" },
+    read_board: null,
+    create_slide_deck: { label: "Slides", href: "slides.html" },
+    add_canvas_shapes: { label: "Canvas", href: "canvas.html" },
+    create_chart: { label: "Charts", href: "charts.html" },
+  };
+
   async function runAgentLoop(agent, history) {
     let iterations = 0;
     const MAX_ITERATIONS = 10;
+    let lastToolPage = null;
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
@@ -695,6 +743,7 @@ Guidelines:
 
       const content = response.content || [];
       history.push({ role: "assistant", content });
+      saveChatState();
 
       const textBlocks = content.filter(b => b.type === "text");
       const toolBlocks = content.filter(b => b.type === "tool_use");
@@ -716,9 +765,16 @@ Guidelines:
           tool_use_id: toolUse.id,
           content: JSON.stringify(result),
         });
+        const page = TOOL_PAGES[toolUse.name];
+        if (page && result.success) lastToolPage = page;
       }
 
       history.push({ role: "user", content: toolResults });
+      saveChatState();
+    }
+
+    if (lastToolPage) {
+      showToast("Agent created items in " + lastToolPage.label, lastToolPage.href);
     }
 
     if (history.length > 40) {
@@ -726,11 +782,21 @@ Guidelines:
       history.length = 0;
       trimmed.forEach(m => history.push(m));
     }
+    saveChatState();
   }
 
   // ---- Init ----
   function init() {
     buildDOM();
+
+    // Restore active agent from session if panel was open
+    const savedAgentId = sessionStorage.getItem("datascope_agent_active");
+    if (savedAgentId) {
+      const agent = loadAgents().find(a => a.id === savedAgentId);
+      if (agent && getChatHistory(agent.id).length) {
+        activeAgent = agent;
+      }
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
