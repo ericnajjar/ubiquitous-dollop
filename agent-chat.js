@@ -392,11 +392,43 @@ Guidelines:
   }
 
   // ---- Claude API with tool_use ----
+  // Ensure every assistant tool_use has a matching tool_result in the next msg.
+  // Remove broken trailing turns so the API never rejects stale history.
+  function sanitizeHistory(history) {
+    const clean = [];
+    for (let i = 0; i < history.length; i++) {
+      const msg = history[i];
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        const toolUseIds = msg.content
+          .filter(b => b.type === "tool_use")
+          .map(b => b.id);
+
+        if (toolUseIds.length) {
+          const next = history[i + 1];
+          if (!next || next.role !== "user" || !Array.isArray(next.content)) {
+            break;
+          }
+          const resultIds = new Set(
+            next.content
+              .filter(b => b.type === "tool_result")
+              .map(b => b.tool_use_id)
+          );
+          if (!toolUseIds.every(id => resultIds.has(id))) {
+            break;
+          }
+        }
+      }
+      clean.push(msg);
+    }
+    return clean;
+  }
+
   async function callAgentAPI(agent, messages) {
     const apiKey = localStorage.getItem(API_KEY_STORE) || "";
     if (!apiKey) throw new Error("No API key configured");
 
     const tools = getToolDefs(agent.capabilities || []);
+    const sanitized = sanitizeHistory(messages);
 
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -410,7 +442,7 @@ Guidelines:
         model: MODEL,
         max_tokens: 2048,
         system: buildAgentSystemPrompt(agent),
-        messages,
+        messages: sanitized,
         tools: tools.length ? tools : undefined,
       }),
     });
@@ -699,7 +731,6 @@ Guidelines:
 
     const history = getChatHistory(activeAgent.id);
     history.push({ role: "user", content: text });
-    saveChatState();
 
     input.disabled = true;
     sendBtn.disabled = true;
@@ -711,6 +742,8 @@ Guidelines:
       removeTyping();
       addBotMsg("Sorry, something went wrong: " + err.message);
     } finally {
+      // Always save after the full exchange — runAgentLoop handles
+      // its own rollback on failure so history is always valid here
       saveChatState();
       input.disabled = false;
       sendBtn.disabled = false;
@@ -732,45 +765,60 @@ Guidelines:
     let iterations = 0;
     const MAX_ITERATIONS = 10;
     let lastToolPage = null;
+    const historyLenBefore = history.length;
 
     while (iterations < MAX_ITERATIONS) {
       iterations++;
       removeTyping();
       showTyping();
 
-      const response = await callAgentAPI(agent, history);
+      let response;
+      try {
+        response = await callAgentAPI(agent, history);
+      } catch (err) {
+        // Roll back history to last valid state (remove any orphaned entries)
+        history.length = historyLenBefore;
+        throw err;
+      }
       removeTyping();
 
       const content = response.content || [];
-      history.push({ role: "assistant", content });
-      saveChatState();
-
       const textBlocks = content.filter(b => b.type === "text");
       const toolBlocks = content.filter(b => b.type === "tool_use");
 
-      textBlocks.forEach(b => {
-        if (b.text && b.text.trim()) addBotMsg(b.text);
-      });
+      // Only push assistant message AFTER we know we can handle it
+      if (toolBlocks.length && response.stop_reason === "tool_use") {
+        // Execute ALL tools first, then push both assistant + results atomically
+        const toolResults = [];
+        for (const toolUse of toolBlocks) {
+          const badge = renderToolBadge(toolUse.name, true);
+          const result = executeTool(toolUse.name, toolUse.input);
+          badge.classList.remove("pending");
+          badge.textContent = "✓ " + badge.textContent.replace("⏳ ", "");
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(result),
+          });
+          const page = TOOL_PAGES[toolUse.name];
+          if (page && result.success) lastToolPage = page;
+        }
 
-      if (!toolBlocks.length || response.stop_reason !== "tool_use") break;
+        // Push as a pair so history always has matching tool_use + tool_result
+        history.push({ role: "assistant", content });
+        history.push({ role: "user", content: toolResults });
 
-      const toolResults = [];
-      for (const toolUse of toolBlocks) {
-        const badge = renderToolBadge(toolUse.name, true);
-        const result = executeTool(toolUse.name, toolUse.input);
-        badge.classList.remove("pending");
-        badge.textContent = "✓ " + badge.textContent.replace("⏳ ", "");
-        toolResults.push({
-          type: "tool_result",
-          tool_use_id: toolUse.id,
-          content: JSON.stringify(result),
+        textBlocks.forEach(b => {
+          if (b.text && b.text.trim()) addBotMsg(b.text);
         });
-        const page = TOOL_PAGES[toolUse.name];
-        if (page && result.success) lastToolPage = page;
+      } else {
+        // No tools — just a text response, safe to push
+        history.push({ role: "assistant", content });
+        textBlocks.forEach(b => {
+          if (b.text && b.text.trim()) addBotMsg(b.text);
+        });
+        break;
       }
-
-      history.push({ role: "user", content: toolResults });
-      saveChatState();
     }
 
     if (lastToolPage) {
@@ -779,8 +827,10 @@ Guidelines:
 
     if (history.length > 40) {
       const trimmed = history.slice(-30);
+      // Ensure we don't trim in the middle of a tool_use/tool_result pair
+      const safe = sanitizeHistory(trimmed);
       history.length = 0;
-      trimmed.forEach(m => history.push(m));
+      safe.forEach(m => history.push(m));
     }
     saveChatState();
   }
