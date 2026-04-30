@@ -26,6 +26,8 @@
     zoom: 1,
   };
 
+  window._canvasAppState = state;
+
   let canvases = [];
   let currentId = null;
 

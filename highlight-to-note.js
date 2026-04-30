@@ -12,11 +12,26 @@
     return sel.toString().trim();
   }
 
+  function getCanvasShapeText() {
+    const cv = window._canvasAppState;
+    if (!cv) return "";
+    if (cv.selected && cv.selected.size === 1) {
+      const id = [...cv.selected][0];
+      const shape = cv.shapes.find(s => s.id === id);
+      if (shape && shape.label) return shape.label.trim();
+    }
+    if (cv.selectedArrows && cv.selectedArrows.size === 1) {
+      const id = [...cv.selectedArrows][0];
+      const arrow = cv.arrows.find(a => a.id === id);
+      if (arrow && arrow.label) return arrow.label.trim();
+    }
+    return "";
+  }
+
   function teamId() {
     return window.datascope?.activeTeamId || null;
   }
 
-  // ---- SVG icons ----
   const ICONS = {
     note: '<svg viewBox="0 0 16 16" fill="none"><path d="M3 2h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
     board: '<svg viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="4" height="12" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="2" width="4" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="11" y="2" width="4" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>',
@@ -132,7 +147,7 @@
     try { const r = localStorage.getItem(key); if (r) charts = JSON.parse(r); } catch (_) {}
 
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
-    const rows = lines.map((line, i) => [line, 1]);
+    const rows = lines.map((line) => [line, 1]);
     const headers = ["Label", "Value"];
 
     charts.push({
@@ -162,9 +177,10 @@
     btn.className = "htn-item";
     btn.innerHTML = ICONS[action.icon] + " " + action.label;
     btn.addEventListener("click", () => {
-      const text = getSelectedText();
+      const text = pendingText || getSelectedText() || getCanvasShapeText();
+      pendingText = null;
       hideMenu();
-      hideDocsCtxMenu();
+      hideExistingCtxMenus();
       if (text) action.handler(text);
       window.getSelection()?.removeAllRanges();
     });
@@ -173,6 +189,7 @@
 
   // ---- Standalone menu ----
   let menu = null;
+  let pendingText = null;
 
   function createMenu() {
     const el = document.createElement("div");
@@ -199,27 +216,30 @@
 
   function hideMenu() {
     if (menu) menu.hidden = true;
+    pendingText = null;
   }
 
-  // ---- Docs page integration ----
-  function injectIntoDocsMenu() {
-    const docsMenu = document.getElementById("docContextMenu");
-    if (!docsMenu || docsMenu.querySelector(".htn-sep")) return;
+  // ---- Integration with existing context menus (docs + slides) ----
+  function injectIntoExistingMenu(menuId) {
+    const ctxMenu = document.getElementById(menuId);
+    if (!ctxMenu || ctxMenu.querySelector(".htn-sep")) return;
 
     const sep = document.createElement("div");
     sep.className = "htn-sep";
-    docsMenu.appendChild(sep);
+    ctxMenu.appendChild(sep);
 
     ACTIONS.forEach(a => {
       const btn = buildMenuItem(a);
       btn.classList.add("ctx-menu-item");
-      docsMenu.appendChild(btn);
+      ctxMenu.appendChild(btn);
     });
   }
 
-  function hideDocsCtxMenu() {
-    const docsMenu = document.getElementById("docContextMenu");
-    if (docsMenu) docsMenu.hidden = true;
+  function hideExistingCtxMenus() {
+    ["docContextMenu", "slideContextMenu"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.hidden = true;
+    });
   }
 
   // ---- Toast ----
@@ -240,21 +260,38 @@
 
   // ---- Context menu listener ----
   function init() {
-    injectIntoDocsMenu();
+    injectIntoExistingMenu("docContextMenu");
+    injectIntoExistingMenu("slideContextMenu");
 
     document.addEventListener("contextmenu", (e) => {
       const text = getSelectedText();
-      if (!text) { hideMenu(); return; }
 
-      if (e.target.closest(".htn-menu, #docContextMenu")) return;
+      if (e.target.closest(".htn-menu, #docContextMenu, #slideContextMenu")) return;
 
+      // Pages with their own context menus handle the injection path
       const inDocProse = e.target.closest(".doc-prose");
       if (inDocProse && document.getElementById("docContextMenu")) return;
 
-      if (e.target.closest("input, textarea, [contenteditable='true']") && !inDocProse) return;
+      const inSlidePreview = e.target.closest("#slidePreview [contenteditable]");
+      if (inSlidePreview && document.getElementById("slideContextMenu")) return;
 
-      e.preventDefault();
-      showMenu(e.clientX, e.clientY);
+      if (text) {
+        e.preventDefault();
+        pendingText = text;
+        showMenu(e.clientX, e.clientY);
+        return;
+      }
+
+      // Canvas: right-click on a selected shape with a label
+      const canvasText = getCanvasShapeText();
+      if (canvasText && e.target.closest("#canvas, .canvas-viewport")) {
+        e.preventDefault();
+        pendingText = canvasText;
+        showMenu(e.clientX, e.clientY);
+        return;
+      }
+
+      hideMenu();
     });
 
     document.addEventListener("click", (e) => {
