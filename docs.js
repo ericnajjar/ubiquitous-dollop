@@ -1491,6 +1491,7 @@
     state.currentDocId = id;
     renderSidebar();
     renderEditor();
+    document.dispatchEvent(new CustomEvent("datascope:docselect", { detail: { docId: id } }));
   }
 
   function addStory() {
@@ -2285,6 +2286,9 @@
     renderSidebar();
     renderEditor();
     setupContextMenu();
+    if (state.currentDocId) {
+      document.dispatchEvent(new CustomEvent("datascope:docselect", { detail: { docId: state.currentDocId } }));
+    }
 
     document.getElementById("newDocBtn").addEventListener("click", createDoc);
     document.getElementById("newFolderBtn").addEventListener("click", createFolder);
@@ -2362,6 +2366,7 @@
       state.currentDocId = docs.length ? docs[0].id : null;
       renderSidebar();
       renderEditor();
+      document.dispatchEvent(new CustomEvent("datascope:docselect", { detail: { docId: state.currentDocId } }));
     });
 
     window.addEventListener("datascope:taskchange", (e) => {
