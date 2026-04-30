@@ -41,6 +41,10 @@
     {
       name: 'Collections', desc: 'Group charts, docs, notes, and more together.', href: 'projects.html',
       icon: '<svg viewBox="0 0 32 32" fill="none"><path d="M4 10a3 3 0 013-3h5l3 3h10a3 3 0 013 3v12a3 3 0 01-3 3H7a3 3 0 01-3-3V10z" stroke="currentColor" stroke-width="2"/></svg>'
+    },
+    {
+      name: 'Agents', desc: 'Create AI agents to collaborate with your team.', href: 'agents.html',
+      icon: '<svg viewBox="0 0 32 32" fill="none"><rect x="6" y="11" width="20" height="15" rx="4" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="18.5" r="2" fill="currentColor"/><circle cx="20" cy="18.5" r="2" fill="currentColor"/><path d="M16 5v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="4" r="2" fill="currentColor"/><path d="M2 17h4M26 17h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
     }
   ];
 

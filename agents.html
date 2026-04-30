@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DataScope — Agents</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="cloud-sync.js"></script>
+  <link rel="stylesheet" href="agents.css" />
+  <script src="agents.js" defer></script>
+  <link rel="stylesheet" href="account.css" />
+  <script src="account.js" defer></script>
+  <link rel="stylesheet" href="mascot.css" />
+  <script src="mascot.js" defer></script>
+  <link rel="stylesheet" href="agent-chat.css" />
+  <script src="agent-chat.js" defer></script>
+  <link rel="stylesheet" href="feedback.css" />
+  <script src="feedback.js" defer></script>
+  <link rel="stylesheet" href="highlight-to-note.css" />
+  <script src="highlight-to-note.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">DataScope Agents</span>
+      </a>
+      <nav class="site-nav">
+        <a href="charts.html">Charts</a>
+        <a href="slides.html">Slides</a>
+        <a href="kanban.html">Board</a>
+        <a href="notes.html">Notes</a>
+        <a href="canvas.html">Canvas</a>
+        <a href="docs.html">Docs</a>
+        <a href="projects.html">Collections</a>
+        <a href="agents.html" class="active">Agents</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="agents-main">
+    <div class="agents-toolbar">
+      <h1>AI Agents</h1>
+      <button type="button" class="btn btn-primary btn-sm" id="createAgentBtn">+ Create Agent</button>
+    </div>
+
+    <div class="api-notice" id="apiNotice" hidden>
+      ⚠️ Agents require a Claude API key. Set one in <a href="settings.html">Settings</a> or via the mascot widget (⚙️).
+    </div>
+
+    <div class="agents-grid" id="agentsGrid"></div>
+    <p class="agents-empty" id="agentsEmpty" hidden>
+      No agents yet. Create an AI agent to collaborate with your team.
+    </p>
+  </main>
+
+  <!-- Create/Edit Agent Modal -->
+  <div class="modal-overlay" id="modalOverlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h2 id="modalTitle">Create Agent</h2>
+        <button type="button" class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="agentNameInput">Name</label>
+          <input type="text" class="form-input" id="agentNameInput" placeholder="e.g. Project Manager, Designer, Analyst..." autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="agentDescInput">Description</label>
+          <input type="text" class="form-input" id="agentDescInput" placeholder="Brief description of what this agent does..." autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="agentInstructionsInput">Instructions</label>
+          <textarea class="form-input" id="agentInstructionsInput" placeholder="Define the agent's persona, expertise, and behavior. e.g. 'You are a product manager who helps break down features into actionable tasks...'" rows="4"></textarea>
+          <p class="form-hint">These instructions define the agent's personality and expertise.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <div class="color-options" id="colorOptions"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Capabilities</label>
+          <div class="cap-options" id="capOptions"></div>
+          <p class="form-hint">Select which tools this agent can use.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost btn-sm danger" id="deleteAgentBtn" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn-ghost btn-sm" id="modalClose2" onclick="document.getElementById('modalClose').click()">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="modalSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>&copy; <span id="year"></span> DataScope. Saved to your account.</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -25,7 +25,7 @@
   const SYNC_KEYS = [
     'datascope_docs', 'datascope_projects', 'datascope_kanban',
     'datascope_slides', 'datascope_notes', 'datascope_canvas',
-    'datascope_saved_charts', 'datascope_profile'
+    'datascope_saved_charts', 'datascope_profile', 'datascope_agents'
   ];
 
   // --- Team context ---

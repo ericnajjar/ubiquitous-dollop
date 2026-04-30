@@ -153,6 +153,11 @@
       keywords: ["project", "collection", "organiz", "manage", "hub", "link", "group", "team", "plan", "overview"],
       description: "Create collections to link charts, decks, board cards, and notes together.", emoji: "📁",
     },
+    agents: {
+      name: "Agents", url: "agents.html",
+      keywords: ["agent", "ai", "bot", "assistant", "automat", "collaborat", "helper", "persona"],
+      description: "Create AI agents with custom personas that can use your tools and collaborate with your team.", emoji: "🤖",
+    },
   };
 
   // ---------- Intent matching ----------
