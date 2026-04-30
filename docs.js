@@ -361,6 +361,7 @@
         doc.updatedAt = new Date().toISOString();
         saveDocs();
       }
+      updateWordCount();
     });
 
     prose.addEventListener("click", (e) => {
@@ -642,6 +643,7 @@
     }
 
     renderBlocks(false);
+    updateWordCount();
 
     divider.hidden = doc.stories.length === 0;
     storiesContainer.innerHTML = "";
@@ -1941,6 +1943,337 @@
     });
   }
 
+  // ---------- Keyboard shortcuts ----------
+  function setupKeyboardShortcuts() {
+    document.addEventListener("keydown", (e) => {
+      if (!activeProse) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+
+      let cmd = null;
+      if (e.key === "b") cmd = "bold";
+      else if (e.key === "i") cmd = "italic";
+      else if (e.key === "u") cmd = "underline";
+      else if (e.key === "k") { e.preventDefault(); showLinkDialog(); return; }
+      else if (e.key === "X" && e.shiftKey) cmd = "strikeThrough";
+
+      if (cmd) {
+        e.preventDefault();
+        document.execCommand(cmd, false, null);
+        saveActiveProse();
+      }
+    });
+  }
+
+  function saveActiveProse() {
+    if (!activeProse) return;
+    const doc = currentDoc();
+    if (!doc) return;
+    const blockId = activeProse.dataset.blockId;
+    const block = doc.blocks?.find(b => b.id === blockId);
+    if (block) {
+      block.content = activeProse.innerHTML;
+      doc.body = doc.blocks.filter(b => b.type === "prose").map(b => b.content || "").join("\n");
+    }
+    saveDocs();
+  }
+
+  // ---------- Link dialog ----------
+  function showLinkDialog() {
+    if (!activeProse) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const selectedText = sel.toString();
+
+    const existingLink = sel.anchorNode?.parentElement?.closest("a");
+    const currentHref = existingLink ? existingLink.href : "";
+
+    document.querySelector(".link-dialog-overlay")?.remove();
+
+    const overlay = document.createElement("div");
+    overlay.className = "link-dialog-overlay";
+    const dialog = document.createElement("div");
+    dialog.className = "link-dialog";
+    dialog.innerHTML = `
+      <div class="link-dialog-title">Insert Link</div>
+      <input type="url" class="link-dialog-input" id="linkUrl" placeholder="https://example.com" value="${currentHref}" />
+      <div class="link-dialog-actions">
+        ${existingLink ? '<button class="btn btn-ghost btn-sm link-dialog-unlink">Unlink</button>' : ''}
+        <span style="flex:1"></span>
+        <button class="btn btn-ghost btn-sm link-dialog-cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm link-dialog-apply">Apply</button>
+      </div>
+    `;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const urlInput = dialog.querySelector("#linkUrl");
+    urlInput.focus();
+    urlInput.select();
+
+    dialog.querySelector(".link-dialog-apply").addEventListener("click", () => {
+      const url = urlInput.value.trim();
+      overlay.remove();
+      if (!url) return;
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand("createLink", false, url);
+      saveActiveProse();
+    });
+
+    dialog.querySelector(".link-dialog-cancel").addEventListener("click", () => overlay.remove());
+
+    const unlinkBtn = dialog.querySelector(".link-dialog-unlink");
+    if (unlinkBtn) {
+      unlinkBtn.addEventListener("click", () => {
+        overlay.remove();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand("unlink", false, null);
+        saveActiveProse();
+      });
+    }
+
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); dialog.querySelector(".link-dialog-apply").click(); }
+      if (e.key === "Escape") overlay.remove();
+    });
+  }
+
+  // ---------- Inline code ----------
+  function toggleInlineCode() {
+    if (!activeProse) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    const codeEl = sel.anchorNode?.parentElement?.closest("code");
+    if (codeEl && !codeEl.closest("pre")) {
+      const text = document.createTextNode(codeEl.textContent);
+      codeEl.replaceWith(text);
+      const r = document.createRange();
+      r.selectNode(text);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } else if (!sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      const code = document.createElement("code");
+      range.surroundContents(code);
+      sel.removeAllRanges();
+      const r = document.createRange();
+      r.selectNodeContents(code);
+      sel.addRange(r);
+    }
+    saveActiveProse();
+  }
+
+  // ---------- Word count ----------
+  function updateWordCount() {
+    const el = document.getElementById("wordCount");
+    if (!el) return;
+    const doc = currentDoc();
+    if (!doc) { el.textContent = ""; return; }
+    let text = "";
+    document.querySelectorAll(".doc-prose").forEach(p => { text += p.textContent + " "; });
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    const chars = text.trim().length;
+    el.textContent = words + " word" + (words !== 1 ? "s" : "") + " · " + chars + " chars";
+  }
+
+  // ---------- Export ----------
+  function exportDoc(format) {
+    const doc = currentDoc();
+    if (!doc) return;
+    saveAllProse();
+
+    const title = doc.title || "Untitled";
+
+    if (format === "pdf") {
+      exportPDF(doc, title);
+    } else if (format === "markdown") {
+      exportMarkdown(doc, title);
+    } else if (format === "html") {
+      exportHTML(doc, title);
+    }
+  }
+
+  function exportPDF(doc, title) {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const proseHTML = collectProseHTML(doc);
+    const taskHTML = collectTaskHTML(doc);
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title>
+      <style>
+        body { font-family: -apple-system, system-ui, sans-serif; max-width: 700px; margin: 40px auto; color: #1a1a1a; line-height: 1.7; padding: 0 24px; }
+        h1 { font-size: 26px; margin: 0 0 24px; }
+        h2 { font-size: 20px; margin: 24px 0 8px; }
+        h3 { font-size: 16px; margin: 20px 0 6px; }
+        p { margin: 0 0 10px; }
+        ul, ol { margin: 0 0 10px; padding-left: 24px; }
+        blockquote { border-left: 3px solid #ccc; margin: 12px 0; padding: 8px 16px; color: #555; }
+        pre { background: #f4f4f4; border-radius: 6px; padding: 12px 16px; overflow-x: auto; font-size: 13px; }
+        code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }
+        pre code { background: none; padding: 0; }
+        hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+        a { color: #2563eb; }
+        table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 13px; }
+        th { background: #f6f6f6; font-weight: 700; }
+        .tag { display: inline-block; background: #e8e8e8; border-radius: 8px; padding: 1px 6px; font-size: 11px; margin-right: 3px; }
+        @media print { body { margin: 0; } }
+      </style></head><body>
+      <h1>${escapeHtml(title)}</h1>${proseHTML}${taskHTML}
+      <script>window.print();<\/script></body></html>`);
+    win.document.close();
+  }
+
+  function exportMarkdown(doc, title) {
+    let md = "# " + title + "\n\n";
+    ensureBlocks(doc);
+    doc.blocks.forEach(block => {
+      if (block.type === "prose") {
+        md += htmlToMarkdown(block.content || "") + "\n\n";
+      } else if (block.type === "tasks") {
+        md += collectTaskMarkdown(block) + "\n\n";
+      }
+    });
+    downloadFile(title + ".md", md.trim(), "text/markdown");
+  }
+
+  function exportHTML(doc, title) {
+    const proseHTML = collectProseHTML(doc);
+    const taskHTML = collectTaskHTML(doc);
+    const html = `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8">\n<title>${escapeHtml(title)}</title>\n<style>\n  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; line-height: 1.7; padding: 0 24px; }\n  blockquote { border-left: 3px solid #ccc; margin: 12px 0; padding: 8px 16px; color: #555; }\n  pre { background: #f4f4f4; border-radius: 6px; padding: 12px 16px; overflow-x: auto; }\n  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-size: 0.9em; }\n  pre code { background: none; padding: 0; }\n  table { width: 100%; border-collapse: collapse; margin: 16px 0; }\n  th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; font-size: 13px; }\n  th { background: #f6f6f6; font-weight: 700; }\n</style>\n</head>\n<body>\n<h1>${escapeHtml(title)}</h1>\n${proseHTML}\n${taskHTML}\n</body>\n</html>`;
+    downloadFile(title + ".html", html, "text/html");
+  }
+
+  function collectProseHTML(doc) {
+    ensureBlocks(doc);
+    return doc.blocks.filter(b => b.type === "prose").map(b => b.content || "").join("\n");
+  }
+
+  function collectTaskHTML(doc) {
+    ensureBlocks(doc);
+    const taskBlocks = doc.blocks.filter(b => b.type === "tasks");
+    if (!taskBlocks.length) return "";
+    let html = "";
+    taskBlocks.forEach(block => {
+      const tasks = st().getTasks(block.taskIds || []);
+      if (!tasks.length) return;
+      const globalCols = st().getColumns();
+      const localColMap = new Map();
+      tasks.forEach(t => (t.localColumns || []).forEach(c => { if (!localColMap.has(c.id)) localColMap.set(c.id, c); }));
+      const allCols = [...globalCols, ...localColMap.values()];
+      html += "<table><thead><tr><th>Task</th>";
+      allCols.forEach(c => { html += "<th>" + escapeHtml(c.name) + "</th>"; });
+      html += "</tr></thead><tbody>";
+      tasks.forEach(task => {
+        html += "<tr><td>" + escapeHtml(task.text || "") + "</td>";
+        allCols.forEach(c => {
+          const val = (task.colValues || {})[c.id] || "";
+          if (c.type === "tags") {
+            html += "<td>" + val.split(",").filter(Boolean).map(t => '<span class="tag">' + escapeHtml(t) + '</span>').join(" ") + "</td>";
+          } else {
+            html += "<td>" + escapeHtml(val) + "</td>";
+          }
+        });
+        html += "</tr>";
+        (task.children || []).forEach(child => {
+          html += "<tr><td>&nbsp;&nbsp;↳ " + escapeHtml(child.text || "") + "</td>";
+          allCols.forEach(c => {
+            const val = (child.colValues || {})[c.id] || "";
+            html += "<td>" + escapeHtml(val) + "</td>";
+          });
+          html += "</tr>";
+        });
+      });
+      html += "</tbody></table>";
+    });
+    return html;
+  }
+
+  function collectTaskMarkdown(block) {
+    const tasks = st().getTasks(block.taskIds || []);
+    if (!tasks.length) return "";
+    const globalCols = st().getColumns();
+    const localColMap = new Map();
+    tasks.forEach(t => (t.localColumns || []).forEach(c => { if (!localColMap.has(c.id)) localColMap.set(c.id, c); }));
+    const allCols = [...globalCols, ...localColMap.values()];
+    let md = "| Task |";
+    allCols.forEach(c => { md += " " + c.name + " |"; });
+    md += "\n|------|";
+    allCols.forEach(() => { md += "------|"; });
+    md += "\n";
+    tasks.forEach(task => {
+      md += "| " + (task.text || "").replace(/\|/g, "\\|") + " |";
+      allCols.forEach(c => {
+        const val = (task.colValues || {})[c.id] || "";
+        md += " " + val.replace(/\|/g, "\\|") + " |";
+      });
+      md += "\n";
+      (task.children || []).forEach(child => {
+        md += "| ↳ " + (child.text || "").replace(/\|/g, "\\|") + " |";
+        allCols.forEach(c => { md += " " + ((child.colValues || {})[c.id] || "").replace(/\|/g, "\\|") + " |"; });
+        md += "\n";
+      });
+    });
+    return md;
+  }
+
+  function htmlToMarkdown(html) {
+    if (!html) return "";
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    return nodeToMd(div).trim();
+  }
+
+  function nodeToMd(node) {
+    let md = "";
+    node.childNodes.forEach(child => {
+      if (child.nodeType === 3) { md += child.textContent; return; }
+      if (child.nodeType !== 1) return;
+      const tag = child.tagName.toLowerCase();
+      const inner = nodeToMd(child);
+      if (tag === "h1") md += "# " + inner + "\n\n";
+      else if (tag === "h2") md += "## " + inner + "\n\n";
+      else if (tag === "h3") md += "### " + inner + "\n\n";
+      else if (tag === "p") md += inner + "\n\n";
+      else if (tag === "blockquote") md += inner.split("\n").map(l => "> " + l).join("\n") + "\n\n";
+      else if (tag === "pre") md += "```\n" + child.textContent + "\n```\n\n";
+      else if (tag === "code" && child.parentElement?.tagName !== "PRE") md += "`" + child.textContent + "`";
+      else if (tag === "b" || tag === "strong") md += "**" + inner + "**";
+      else if (tag === "i" || tag === "em") md += "*" + inner + "*";
+      else if (tag === "u") md += "__" + inner + "__";
+      else if (tag === "s" || tag === "strike" || tag === "del") md += "~~" + inner + "~~";
+      else if (tag === "a") md += "[" + inner + "](" + (child.getAttribute("href") || "") + ")";
+      else if (tag === "br") md += "\n";
+      else if (tag === "hr") md += "\n---\n\n";
+      else if (tag === "ul") {
+        child.querySelectorAll(":scope > li").forEach(li => { md += "- " + nodeToMd(li).trim() + "\n"; });
+        md += "\n";
+      } else if (tag === "ol") {
+        let n = 1;
+        child.querySelectorAll(":scope > li").forEach(li => { md += n++ + ". " + nodeToMd(li).trim() + "\n"; });
+        md += "\n";
+      } else if (tag === "li") md += inner;
+      else md += inner;
+    });
+    return md;
+  }
+
+  function downloadFile(name, content, type) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   // ---------- Init ----------
   function init() {
     document.getElementById("year").textContent = new Date().getFullYear();
@@ -1960,22 +2293,42 @@
     document.getElementById("deleteDocBtn").addEventListener("click", deleteDoc);
     document.getElementById("historyBtn").addEventListener("click", openVersionHistory);
 
-    document.querySelectorAll(".prose-btn").forEach((btn) => {
+    document.querySelectorAll(".prose-btn[data-cmd]").forEach((btn) => {
       btn.addEventListener("mousedown", (e) => {
         e.preventDefault();
         if (!activeProse) return;
         const cmd = btn.dataset.cmd;
         const val = btn.dataset.val || null;
         document.execCommand(cmd, false, val);
-        const doc = currentDoc();
-        if (doc) {
-          const blockId = activeProse.dataset.blockId;
-          const block = doc.blocks?.find(b => b.id === blockId);
-          if (block) { block.content = activeProse.innerHTML; doc.body = doc.blocks.filter(b => b.type === "prose").map(b => b.content || "").join("\n"); }
-          saveDocs();
-        }
+        saveActiveProse();
+        updateWordCount();
       });
     });
+
+    document.getElementById("insertLinkBtn").addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      showLinkDialog();
+    });
+
+    document.getElementById("inlineCodeBtn").addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      toggleInlineCode();
+    });
+
+    const exportBtn = document.getElementById("exportBtn");
+    const exportMenu = document.getElementById("exportMenu");
+    exportBtn.addEventListener("click", () => { exportMenu.hidden = !exportMenu.hidden; });
+    document.querySelectorAll(".prose-export-item").forEach(item => {
+      item.addEventListener("click", () => {
+        exportMenu.hidden = true;
+        exportDoc(item.dataset.format);
+      });
+    });
+    document.addEventListener("click", (e) => {
+      if (!exportBtn.contains(e.target) && !exportMenu.contains(e.target)) exportMenu.hidden = true;
+    });
+
+    setupKeyboardShortcuts();
 
     document.getElementById("docTitle").addEventListener("input", () => {
       const doc = currentDoc();
