@@ -2025,6 +2025,16 @@ Guidelines:
       titleEl.textContent = state.boardTitle;
       renderAll();
     });
+
+    window.addEventListener("datascope:externalAdd", (e) => {
+      if (e.detail?.target !== "board") return;
+      const fresh = loadBoards();
+      if (fresh) {
+        boards = fresh;
+        state = getActiveBoard();
+        renderAll();
+      }
+    });
   }
 
   if (document.readyState === "loading") {

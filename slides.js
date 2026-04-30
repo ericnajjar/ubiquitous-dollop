@@ -2038,6 +2038,25 @@ Guidelines:
     window.addEventListener("datascope:taskchange", (e) => {
       if (e.detail?.type === "external") renderSlidePreview();
     });
+
+    window.addEventListener("datascope:externalAdd", (e) => {
+      if (e.detail?.target !== "slides-push") return;
+      const slide = e.detail?.slide;
+      if (!slide) return;
+      saveFieldsFromDOM();
+      const tid = e.detail.teamId || null;
+      let proj = state.projects.find(p => (p.teamId || null) === tid);
+      if (!proj) {
+        proj = { id: uid(), teamId: tid, name: "My Deck", projectId: "", slides: [] };
+        state.projects.push(proj);
+      }
+      proj.slides.push(slide);
+      const projIdx = state.projects.indexOf(proj);
+      state.currentProject = projIdx;
+      state.currentSlide = proj.slides.length - 1;
+      saveState();
+      renderAll();
+    });
   }
 
   if (document.readyState === "loading") {

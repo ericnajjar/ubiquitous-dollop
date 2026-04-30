@@ -2561,6 +2561,23 @@
     window.addEventListener("datascope:taskchange", (e) => {
       if (e.detail?.type === "external") draw();
     });
+
+    window.addEventListener("datascope:externalAdd", (e) => {
+      if (e.detail?.target === "canvas-draw") {
+        save(); draw();
+        return;
+      }
+      if (e.detail?.target !== "canvas") return;
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (Array.isArray(data)) canvases = data;
+        }
+        syncToState(currentId);
+        draw();
+      } catch (_) {}
+    });
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

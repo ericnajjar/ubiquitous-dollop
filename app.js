@@ -1201,6 +1201,12 @@
       renderChartLibrary();
     });
 
+    window.addEventListener("datascope:externalAdd", (e) => {
+      if (e.detail?.target !== "charts") return;
+      renderSavedChartsSelect();
+      renderChartLibrary();
+    });
+
     // Reset palette
     document.getElementById("resetColorsBtn").addEventListener("click", () => {
       state.colors = [...defaultPalette];

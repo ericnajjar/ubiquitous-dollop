@@ -53,6 +53,7 @@
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     });
     localStorage.setItem(key, JSON.stringify(notes));
+    window.dispatchEvent(new CustomEvent("datascope:externalAdd", { detail: { target: "notes" } }));
     showToast("Saved to Notes", "notes.html");
   }
 
@@ -85,12 +86,35 @@
       comments: [], createdAt: new Date().toISOString(),
     });
     localStorage.setItem(key, JSON.stringify(boards));
+    window.dispatchEvent(new CustomEvent("datascope:externalAdd", { detail: { target: "board" } }));
     showToast("Added to Board", "kanban.html");
+  }
+
+  function buildSlide(text) {
+    return {
+      template: "title-body",
+      content: {
+        title: text.length > 60 ? text.slice(0, 60) + "..." : text,
+        body: text,
+      },
+      font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      textColor: "#ffffff", bgColor: "#1a1a2e", comments: [],
+    };
   }
 
   function saveToSlides(text) {
     const key = "datascope_slides";
     const tid = teamId();
+
+    // If on slides page, push into live state via event
+    if (document.getElementById("slidePreview")) {
+      window.dispatchEvent(new CustomEvent("datascope:externalAdd", {
+        detail: { target: "slides-push", slide: buildSlide(text), teamId: tid },
+      }));
+      showToast("Added to Slides", "slides.html");
+      return;
+    }
+
     let data = { projects: [], currentProject: 0, currentSlide: 0 };
     try { const r = localStorage.getItem(key); if (r) data = JSON.parse(r); } catch (_) {}
     if (!data.projects) data.projects = [];
@@ -101,42 +125,45 @@
       data.projects.push(proj);
     }
 
-    proj.slides.push({
-      template: "title-body",
-      content: {
-        title: text.length > 60 ? text.slice(0, 60) + "..." : text,
-        body: text,
-      },
-      font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
-      textColor: "#ffffff", bgColor: "#1a1a2e", comments: [],
-    });
+    proj.slides.push(buildSlide(text));
     localStorage.setItem(key, JSON.stringify(data));
     showToast("Added to Slides", "slides.html");
   }
 
-  function saveToCanvas(text) {
-    const key = "datascope_canvas";
-    const tid = teamId();
-    let canvases = [];
-    try { const r = localStorage.getItem(key); if (r) canvases = JSON.parse(r); } catch (_) {}
-
-    let cv = canvases.find(c => (c.teamId || null) === tid);
-    if (!cv) {
-      cv = { id: uid(), teamId: tid, name: "Canvas 1", shapes: [], arrows: [] };
-      canvases.push(cv);
-    }
-
+  function buildTextShape(text) {
     const lines = text.split("\n");
     const estH = Math.max(40, lines.length * 20 + 16);
     const estW = Math.max(160, Math.min(400, Math.max(...lines.map(l => l.length)) * 8 + 24));
-
-    cv.shapes.push({
+    return {
       id: uid(), type: "text",
       x: 100 + Math.random() * 200, y: 100 + Math.random() * 200,
       w: estW, h: estH,
       fill: "transparent", stroke: "#6ea8ff", strokeWidth: 1.5,
       label: text, textColor: "#e7ecff", textAlign: "left", fontSize: 14,
-    });
+    };
+  }
+
+  function saveToCanvas(text) {
+    const cv = window._canvasAppState;
+    if (cv && cv.shapes) {
+      cv.shapes.push(buildTextShape(text));
+      window.dispatchEvent(new CustomEvent("datascope:externalAdd", { detail: { target: "canvas-draw" } }));
+      showToast("Added to Canvas", "canvas.html");
+      return;
+    }
+
+    const key = "datascope_canvas";
+    const tid = teamId();
+    let canvases = [];
+    try { const r = localStorage.getItem(key); if (r) canvases = JSON.parse(r); } catch (_) {}
+
+    let c = canvases.find(cv2 => (cv2.teamId || null) === tid);
+    if (!c) {
+      c = { id: uid(), teamId: tid, name: "Canvas 1", shapes: [], arrows: [] };
+      canvases.push(c);
+    }
+
+    c.shapes.push(buildTextShape(text));
     localStorage.setItem(key, JSON.stringify(canvases));
     showToast("Added to Canvas", "canvas.html");
   }
@@ -160,6 +187,7 @@
       fontSize: "13", thumbnail: null, savedAt: new Date().toISOString(),
     });
     localStorage.setItem(key, JSON.stringify(charts));
+    window.dispatchEvent(new CustomEvent("datascope:externalAdd", { detail: { target: "charts" } }));
     showToast("Added to Charts", "charts.html");
   }
 

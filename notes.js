@@ -412,6 +412,12 @@
     });
 
     document.addEventListener("datascope:teamchange", () => render());
+
+    window.addEventListener("datascope:externalAdd", (e) => {
+      if (e.detail?.target !== "notes") return;
+      state.notes = loadNotes();
+      render();
+    });
   }
 
   if (document.readyState === "loading") {
