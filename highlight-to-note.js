@@ -1,7 +1,5 @@
 (() => {
-  const NOTES_KEY = "datascope_notes";
   const currentPage = location.pathname.split("/").pop().replace(".html", "") || "index";
-
   if (currentPage === "auth") return;
 
   function uid() {
@@ -14,6 +12,166 @@
     return sel.toString().trim();
   }
 
+  function teamId() {
+    return window.datascope?.activeTeamId || null;
+  }
+
+  // ---- SVG icons ----
+  const ICONS = {
+    note: '<svg viewBox="0 0 16 16" fill="none"><path d="M3 2h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    board: '<svg viewBox="0 0 16 16" fill="none"><rect x="1" y="2" width="4" height="12" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="6" y="2" width="4" height="8" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="11" y="2" width="4" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>',
+    slide: '<svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M8 12v2M6 14h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    canvas: '<svg viewBox="0 0 16 16" fill="none"><text x="3" y="12" font-size="11" font-weight="700" fill="currentColor">T</text><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.1"/></svg>',
+    chart: '<svg viewBox="0 0 16 16" fill="none"><rect x="2" y="8" width="3" height="6" rx=".5" stroke="currentColor" stroke-width="1.1"/><rect x="6.5" y="5" width="3" height="9" rx=".5" stroke="currentColor" stroke-width="1.1"/><rect x="11" y="2" width="3" height="12" rx=".5" stroke="currentColor" stroke-width="1.1"/></svg>',
+  };
+
+  // ---- Save handlers ----
+  function saveAsNote(text) {
+    const key = "datascope_notes";
+    let notes = [];
+    try { const r = localStorage.getItem(key); if (r) notes = JSON.parse(r); } catch (_) {}
+    notes.unshift({
+      id: uid(), teamId: teamId(),
+      title: text.length > 60 ? text.slice(0, 60) + "..." : text,
+      body: text, tags: ["highlighted"], dueDate: "", projectId: "",
+      colorIdx: 0, pinned: false,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    });
+    localStorage.setItem(key, JSON.stringify(notes));
+    showToast("Saved to Notes", "notes.html");
+  }
+
+  function saveToBoard(text) {
+    const key = "datascope_kanban";
+    const tid = teamId();
+    let boards = [];
+    try { const r = localStorage.getItem(key); if (r) boards = JSON.parse(r); } catch (_) {}
+    if (!Array.isArray(boards)) boards = boards ? [boards] : [];
+
+    let board = boards.find(b => (b.teamId || null) === tid);
+    if (!board) {
+      board = {
+        id: uid(), teamId: tid, boardTitle: tid ? "Team Board" : "My Board",
+        columns: [
+          { id: uid(), title: "To Do", cards: [] },
+          { id: uid(), title: "In Progress", cards: [] },
+          { id: uid(), title: "Done", cards: [] },
+        ],
+      };
+      boards.push(board);
+    }
+
+    const col = board.columns[0];
+    col.cards.push({
+      id: uid(), title: text.length > 80 ? text.slice(0, 80) + "..." : text,
+      description: text, priority: "medium", cardType: "story", parentId: null,
+      startDate: "", dueDate: "", reminder: "", tags: ["highlighted"],
+      projectId: "", attachments: { canvases: [], charts: [], decks: [] },
+      comments: [], createdAt: new Date().toISOString(),
+    });
+    localStorage.setItem(key, JSON.stringify(boards));
+    showToast("Added to Board", "kanban.html");
+  }
+
+  function saveToSlides(text) {
+    const key = "datascope_slides";
+    const tid = teamId();
+    let data = { projects: [], currentProject: 0, currentSlide: 0 };
+    try { const r = localStorage.getItem(key); if (r) data = JSON.parse(r); } catch (_) {}
+    if (!data.projects) data.projects = [];
+
+    let proj = data.projects.find(p => (p.teamId || null) === tid);
+    if (!proj) {
+      proj = { id: uid(), teamId: tid, name: "My Deck", projectId: "", slides: [] };
+      data.projects.push(proj);
+    }
+
+    proj.slides.push({
+      template: "title-body",
+      content: {
+        title: text.length > 60 ? text.slice(0, 60) + "..." : text,
+        body: text,
+      },
+      font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      textColor: "#ffffff", bgColor: "#1a1a2e", comments: [],
+    });
+    localStorage.setItem(key, JSON.stringify(data));
+    showToast("Added to Slides", "slides.html");
+  }
+
+  function saveToCanvas(text) {
+    const key = "datascope_canvas";
+    const tid = teamId();
+    let canvases = [];
+    try { const r = localStorage.getItem(key); if (r) canvases = JSON.parse(r); } catch (_) {}
+
+    let cv = canvases.find(c => (c.teamId || null) === tid);
+    if (!cv) {
+      cv = { id: uid(), teamId: tid, name: "Canvas 1", shapes: [], arrows: [] };
+      canvases.push(cv);
+    }
+
+    const lines = text.split("\n");
+    const estH = Math.max(40, lines.length * 20 + 16);
+    const estW = Math.max(160, Math.min(400, Math.max(...lines.map(l => l.length)) * 8 + 24));
+
+    cv.shapes.push({
+      id: uid(), type: "text",
+      x: 100 + Math.random() * 200, y: 100 + Math.random() * 200,
+      w: estW, h: estH,
+      fill: "transparent", stroke: "#6ea8ff", strokeWidth: 1.5,
+      label: text, textColor: "#e7ecff", textAlign: "left", fontSize: 14,
+    });
+    localStorage.setItem(key, JSON.stringify(canvases));
+    showToast("Added to Canvas", "canvas.html");
+  }
+
+  function saveToChart(text) {
+    const key = "datascope_saved_charts";
+    let charts = [];
+    try { const r = localStorage.getItem(key); if (r) charts = JSON.parse(r); } catch (_) {}
+
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    const rows = lines.map((line, i) => [line, 1]);
+    const headers = ["Label", "Value"];
+
+    charts.push({
+      id: uid(), teamId: teamId(),
+      name: text.length > 40 ? text.slice(0, 40) + "..." : text,
+      projectId: "", headers: headers, rows: rows,
+      colors: ["#6ea8ff", "#8b5cf6"], seriesIndices: [1], xAxisIndex: 0,
+      chartType: "bar", stacked: false,
+      font: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+      fontSize: "13", thumbnail: null, savedAt: new Date().toISOString(),
+    });
+    localStorage.setItem(key, JSON.stringify(charts));
+    showToast("Added to Charts", "charts.html");
+  }
+
+  // ---- Menu items ----
+  const ACTIONS = [
+    { label: "Save as Note", icon: "note", handler: saveAsNote },
+    { label: "Add to Board", icon: "board", handler: saveToBoard },
+    { label: "Add to Slides", icon: "slide", handler: saveToSlides },
+    { label: "Add to Canvas", icon: "canvas", handler: saveToCanvas },
+    { label: "Add to Charts", icon: "chart", handler: saveToChart },
+  ];
+
+  function buildMenuItem(action) {
+    const btn = document.createElement("button");
+    btn.className = "htn-item";
+    btn.innerHTML = ICONS[action.icon] + " " + action.label;
+    btn.addEventListener("click", () => {
+      const text = getSelectedText();
+      hideMenu();
+      hideDocsCtxMenu();
+      if (text) action.handler(text);
+      window.getSelection()?.removeAllRanges();
+    });
+    return btn;
+  }
+
+  // ---- Standalone menu ----
   let menu = null;
 
   function createMenu() {
@@ -22,78 +180,56 @@
     el.id = "htnMenu";
     el.hidden = true;
 
-    el.appendChild(buildNoteButton());
+    const label = document.createElement("div");
+    label.className = "htn-label";
+    label.textContent = "Send to...";
+    el.appendChild(label);
+
+    ACTIONS.forEach(a => el.appendChild(buildMenuItem(a)));
     document.body.appendChild(el);
     return el;
-  }
-
-  function buildNoteButton() {
-    const btn = document.createElement("button");
-    btn.className = "htn-item";
-    btn.innerHTML = '<svg viewBox="0 0 16 16" fill="none"><path d="M3 2h10a1 1 0 011 1v10a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg> Save as Note';
-    btn.addEventListener("click", handleSaveAsNote);
-    return btn;
   }
 
   function showMenu(x, y) {
     if (!menu) menu = createMenu();
     menu.hidden = false;
-    menu.style.left = Math.min(x, window.innerWidth - 180) + "px";
-    menu.style.top = Math.min(y, window.innerHeight - 50) + "px";
+    menu.style.left = Math.min(x, window.innerWidth - 200) + "px";
+    menu.style.top = Math.min(y, window.innerHeight - (ACTIONS.length * 38 + 40)) + "px";
   }
 
   function hideMenu() {
     if (menu) menu.hidden = true;
   }
 
-  function saveSelectedAsNote() {
-    const text = getSelectedText();
-    if (!text) return;
+  // ---- Docs page integration ----
+  function injectIntoDocsMenu() {
+    const docsMenu = document.getElementById("docContextMenu");
+    if (!docsMenu || docsMenu.querySelector(".htn-sep")) return;
 
-    const title = text.length > 60 ? text.slice(0, 60) + "..." : text;
-    const now = new Date().toISOString();
-    const teamId = window.datascope?.activeTeamId || null;
+    const sep = document.createElement("div");
+    sep.className = "htn-sep";
+    docsMenu.appendChild(sep);
 
-    const note = {
-      id: uid(),
-      teamId: teamId,
-      title: title,
-      body: text,
-      tags: ["highlighted"],
-      dueDate: "",
-      projectId: "",
-      colorIdx: 0,
-      pinned: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    let notes = [];
-    try {
-      const raw = localStorage.getItem(NOTES_KEY);
-      if (raw) notes = JSON.parse(raw);
-    } catch (_) {}
-
-    notes.unshift(note);
-    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-
-    window.getSelection()?.removeAllRanges();
-    showToast();
+    ACTIONS.forEach(a => {
+      const btn = buildMenuItem(a);
+      btn.classList.add("ctx-menu-item");
+      docsMenu.appendChild(btn);
+    });
   }
 
-  function handleSaveAsNote() {
-    hideMenu();
-    hideDocsCtxBtn();
-    saveSelectedAsNote();
+  function hideDocsCtxMenu() {
+    const docsMenu = document.getElementById("docContextMenu");
+    if (docsMenu) docsMenu.hidden = true;
   }
 
-  function showToast() {
+  // ---- Toast ----
+  function showToast(message, href) {
     const existing = document.querySelector(".htn-toast");
     if (existing) existing.remove();
 
     const toast = document.createElement("div");
     toast.className = "htn-toast";
-    toast.innerHTML = 'Saved to Notes <a class="htn-toast-link" href="notes.html">View &rarr;</a>';
+    toast.innerHTML = message + ' <a class="htn-toast-link" href="' + href + '">View &rarr;</a>';
     document.body.appendChild(toast);
 
     setTimeout(() => {
@@ -102,33 +238,13 @@
     }, 2500);
   }
 
-  let docsCtxBtn = null;
-
-  function injectIntoDocsMenu() {
-    const docsMenu = document.getElementById("docContextMenu");
-    if (!docsMenu) return false;
-    if (!docsMenu.querySelector(".htn-item")) {
-      docsCtxBtn = buildNoteButton();
-      docsCtxBtn.classList.add("ctx-menu-item");
-      docsMenu.appendChild(docsCtxBtn);
-    }
-    return true;
-  }
-
-  function hideDocsCtxBtn() {
-    const docsMenu = document.getElementById("docContextMenu");
-    if (docsMenu) docsMenu.hidden = true;
-  }
-
+  // ---- Context menu listener ----
   function init() {
     injectIntoDocsMenu();
 
     document.addEventListener("contextmenu", (e) => {
       const text = getSelectedText();
-      if (!text) {
-        hideMenu();
-        return;
-      }
+      if (!text) { hideMenu(); return; }
 
       if (e.target.closest(".htn-menu, #docContextMenu")) return;
 

@@ -1,20 +1,28 @@
-/* Highlight-to-note context menu */
+/* Highlight-to-tool context menu */
 .htn-menu {
   position: fixed; z-index: 300;
   background: #161d3d;
   border: 1px solid rgba(255,255,255,.1);
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,.5);
   padding: 4px;
-  min-width: 160px;
+  min-width: 180px;
   animation: htnFade .1s ease-out;
 }
 .htn-menu[hidden] { display: none; }
 @keyframes htnFade { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
 
+.htn-label {
+  padding: 6px 12px 4px;
+  font-size: 10px; font-weight: 700;
+  color: #5a6490;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
 .htn-item {
   display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 8px 12px;
+  width: 100%; padding: 7px 12px;
   background: none; border: none; border-radius: 6px;
   color: #e7ecff; font: inherit; font-size: 13px; font-weight: 500;
   cursor: pointer; text-align: left;
@@ -22,6 +30,12 @@
 }
 .htn-item:hover { background: rgba(110,168,255,.12); }
 .htn-item svg { width: 14px; height: 14px; flex-shrink: 0; color: #6ea8ff; }
+
+.htn-sep {
+  height: 1px;
+  background: rgba(255,255,255,.08);
+  margin: 4px 8px;
+}
 
 /* Toast */
 .htn-toast {
